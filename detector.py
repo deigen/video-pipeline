@@ -5,13 +5,13 @@ Object Detection using HF models
 import torch
 import numpy as np
 from PIL import Image
-import torch
 
+import pipeline as pl
 
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 
-class HFDetector:
+class HFDetector(pl.Component):
     def __init__(self, model_name=None, score_threshold=0.5, device=DEVICE):
         """
         Uses a Hugging Face model for object detection.
@@ -21,12 +21,14 @@ class HFDetector:
         """
         from transformers import AutoModelForObjectDetection, AutoImageProcessor
 
+        super().__init__()
+
         model_name = model_name or 'facebook/detr-resnet-50'
 
         self.device = device
         self.score_threshold = score_threshold
 
-        self.image_processor = AutoImageProcessor.from_pretrained(model_name)
+        self.image_processor = AutoImageProcessor.from_pretrained(model_name, use_fast=True)
         self.model = AutoModelForObjectDetection.from_pretrained(model_name)
 
         self.model.to(self.device)
@@ -44,16 +46,29 @@ class HFDetector:
         Returns:
             list: Detected objects with bounding boxes and scores.
         """
+        singleton = isinstance(image, Image.Image) or image.ndim == 3
+
         inputs = self.image_processor(images=image, return_tensors="pt")
         inputs = {k: v.to(self.device) for k, v in inputs.items()}
 
-        with torch.no_grad():
-             outputs = self.model(**inputs)
+        outputs = self.model(**inputs)
 
         results = self.image_processor.post_process_object_detection(outputs, target_sizes=torch.tensor([(image.height, image.width)]), threshold=0.5)
 
-        return results
+        return results[0] if singleton else results
 
+
+    def process(self, data):
+        """
+        Process the input data to perform object detection.
+        
+        Args:
+            data (pl.FrameData): Frame state data containing 'frame'.
+        """
+        if 'frame' not in data:
+            raise ValueError("Input data must contain 'frame' attribute.")
+
+        data.detections = self.detect(data.frame)
 
 
 def test():
@@ -63,7 +78,6 @@ def test():
     image = Image.open('test_data/sample.jpg')
     detector = HFDetector()
     detections = detector.detect(image)
-    detections = detections[0]  # remove batch dimension
     
     for score, label_id, box in zip(detections["scores"], detections["labels"], detections["boxes"]):
         score, label = score.item(), label_id.item()

@@ -7,6 +7,7 @@ import pipeline as pl
 
 class Tracker(pl.Component):
     def __init__(self):
+        super().__init__()
         self.tracker = sv.ByteTrack()
 
     def update(self, detections):

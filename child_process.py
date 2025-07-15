@@ -20,26 +20,31 @@ import os
 import sys
 import multiprocessing
 
+
+def child_process(cls, args, kwargs, child_conn):
+    instance = cls(*args, **kwargs)
+    while True:
+        try:
+            method_name, method_args, method_kwargs = child_conn.recv()
+            if method_name == 'exit':
+                break
+            if method_name == 'ready':
+                child_conn.send('ready')
+                continue
+            method = getattr(instance, method_name)
+            result = method(*method_args, **method_kwargs)
+            child_conn.send(result)
+        except Exception as e:
+            child_conn.send(e)
+
 def Process(cls, *args, **kwargs):
+    # need to use 'spawn' for cuda init
+    if multiprocessing.get_start_method(allow_none=True) != 'spawn':
+        multiprocessing.set_start_method('spawn')
+
     parent_conn, child_conn = multiprocessing.Pipe()
 
-    def child_process():
-        instance = cls(*args, **kwargs)
-        while True:
-            try:
-                method_name, method_args, method_kwargs = child_conn.recv()
-                if method_name == 'exit':
-                    break
-                if method_name == 'ready':
-                    child_conn.send('ready')
-                    continue
-                method = getattr(instance, method_name)
-                result = method(*method_args, **method_kwargs)
-                child_conn.send(result)
-            except Exception as e:
-                child_conn.send(e)
-
-    process = multiprocessing.Process(target=child_process)
+    process = multiprocessing.Process(target=child_process, args=(cls, args, kwargs, child_conn))
     process.start()
 
     class ClientProxy:
@@ -63,7 +68,7 @@ def Process(cls, *args, **kwargs):
 
         def wait_for_ready(self):
             # Wait for the child process to be ready
-            if not parent_conn.poll(5):
+            if not parent_conn.poll(120):
                 raise RuntimeError("Child process did not start in time")
             if self._call('ready', None, None) != 'ready':
                 raise RuntimeError("Child process did not signal readiness")

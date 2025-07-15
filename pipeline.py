@@ -42,6 +42,17 @@ def ts():
   return time.monotonic() - _START_TIME
 
 
+class FrameData(types.SimpleNamespace):
+  def __contains__(self, item):
+    return hasattr(self, item)
+
+  def __getitem__(self, item):
+    return getattr(self, item)
+
+  def __setitem__(self, key, value):
+    setattr(self, key, value)
+
+
 class Item:
 
   _ID_COUNTER = itertools.count()
@@ -50,7 +61,7 @@ class Item:
     self.id = next(Item._ID_COUNTER)
     self.states = {}
     self.error = None
-    self.data = types.SimpleNamespace()
+    self.data = FrameData()
 
   def __repr__(self):
     return f'Item({self.id})'

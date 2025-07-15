@@ -2,6 +2,7 @@ import threading
 import time
 import types
 
+import child_process
 import pipeline as pl
 #from clarifai.utils import video_utils
 
@@ -57,7 +58,10 @@ class FrameReader(pl.Component):
     self.video_frames_generator = video_frames_generator
 
   def process(self, data):
-    data.frame = next(self.video_frames_generator)
+    try:
+      data.frame = next(self.video_frames_generator)
+    except StopIteration:
+      raise pl.Drop
 
 
 class ExecuteIfReady(pl.Component):
