@@ -20,8 +20,50 @@ import os
 import sys
 import multiprocessing
 
+def Process(cls, *args, **kwargs):
+    ctx = multiprocessing.get_context('spawn')
 
-def child_process(cls, args, kwargs, child_conn):
+    parent_conn, child_conn = ctx.Pipe()
+
+    process = ctx.Process(target=_child_process_server_loop, args=(cls, args, kwargs, child_conn))
+    process.start()
+
+    class _ClientProxy(ClientProxy):
+        __name__ = f'ClientProxy<{cls.__name__}>'
+
+    client = _ClientProxy(process, parent_conn, child_conn)
+
+    return client
+
+
+class ClientProxy:
+    def __init__(self, process, parent_conn, child_conn):
+        self._process = process
+        self._parent_conn = parent_conn
+        self._child_conn = child_conn
+        self.wait_for_ready()
+
+    def __getattr__(self, name):
+        return lambda *args, **kwargs: self._call(name, args, kwargs)
+
+    def _call(self, name, args, kwargs):
+        self._parent_conn.send((name, args, kwargs))
+        result = self._parent_conn.recv()
+        if isinstance(result, Exception):
+            raise result
+        return result
+
+    def wait_for_ready(self):
+        # Wait for the child process to be ready
+        if self._call('ready', None, None) != 'ready':
+            raise RuntimeError("Child process did not signal readiness")
+
+    def exit(self):
+        self._parent_conn.send(('exit', None, None))
+        self._process.join()
+
+
+def _child_process_server_loop(cls, args, kwargs, child_conn):
     instance = cls(*args, **kwargs)
     while True:
         try:
@@ -37,46 +79,22 @@ def child_process(cls, args, kwargs, child_conn):
         except Exception as e:
             child_conn.send(e)
 
-def Process(cls, *args, **kwargs):
-    # need to use 'spawn' for cuda init
-    if multiprocessing.get_start_method(allow_none=True) != 'spawn':
-        multiprocessing.set_start_method('spawn')
 
-    parent_conn, child_conn = multiprocessing.Pipe()
+class _TestClass:
+    def __init__(self, value):
+        self.value = value
 
-    process = multiprocessing.Process(target=child_process, args=(cls, args, kwargs, child_conn))
-    process.start()
+    def f(self, x):
+        return self.value + x
 
-    class ClientProxy:
-        __name__ = f'ClientProxy<{cls.__name__}>'
 
-        def __init__(self):
-            self._process = process
-            self._parent_conn = parent_conn
-            self._child_conn = child_conn
-            self.wait_for_ready()
+def test():
 
-        def __getattr__(self, name):
-            return lambda *args, **kwargs: self._call(name, args, kwargs)
+    client = Process(_TestClass, 10)  # client is a proxy to MyClass in the child process
+    result = client.f(5)  # result is 15, computed in the child process
+    assert result == 15, f"Expected 15, got {result}"
+    client.exit()
+    print("Done")
 
-        def _call(self, name, args, kwargs):
-            parent_conn.send((name, args, kwargs))
-            result = parent_conn.recv()
-            if isinstance(result, Exception):
-                raise result
-            return result
-
-        def wait_for_ready(self):
-            # Wait for the child process to be ready
-            if not parent_conn.poll(120):
-                raise RuntimeError("Child process did not start in time")
-            if self._call('ready', None, None) != 'ready':
-                raise RuntimeError("Child process did not signal readiness")
-
-        def exit(self):
-            parent_conn.send(('exit', None, None))
-            process.join()
-
-    client = ClientProxy()
-
-    return client
+if __name__ == "__main__":
+    test()
