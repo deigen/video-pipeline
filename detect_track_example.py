@@ -15,8 +15,6 @@ def main():
     tracker = Multiprocess(Tracker)
     tracker.num_instances(1)  # tracker has to be single instance to see all detections sequentially
 
-    meter = pl.ThroughputMeter()
-
     video_file = 'test_data/venice2.mp4'
     def video_frames_loop():
         while True:
@@ -28,11 +26,10 @@ def main():
 
     last = (
       source >> Counter()
-      >> pl.AdaptiveRateLimiter(meter, initial_rate=30, print_stats_interval=1.0)
+      >> pl.AdaptiveRateLimiter(initial_rate=30, print_stats_interval=1.0)
       >> detector
       >> tracker
-      >> Print(lambda data: f'{len(data.tracked_objects.tracker_id)} objects tracked, latency: {pl.ts() - data.create_time:.3f}, throughput: {meter.get():.3f}')
-      >> meter
+      >> Print(lambda data: f'{len(data.tracked_objects.tracker_id)} objects tracked, latency: {pl.ts() - data.create_time:.3f}, throughput: {engine.global_meter.get():.3f} FPS')
     )
 
     engine = pl.PipelineEngine()

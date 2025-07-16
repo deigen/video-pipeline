@@ -148,6 +148,7 @@ class PipelineEngine:
     self.changed_event = threading.Event()
     self.max_buffer_size = max_buffer_size
     self.running = True
+    self.global_meter = ThroughputMeter()  # overall throughput meter for the engine
 
   def add_component(self, component, recursive=True):
     if component in self.components:
@@ -235,6 +236,14 @@ class PipelineEngine:
       del self.work_buffer[:num_remove]
 
   def _verify_components(self):
+    # add global meter behind every component
+    for component in self.components:
+      self.global_meter.depends_on(component)
+    self.add_component(self.global_meter, recursive=False)
+    # AdaptiveRateLimiter requires a downstream meter, set to global meter by default
+    for component in self.components:
+      if isinstance(component, AdaptiveRateLimiter) and component.downstream_meter is None:
+        component.downstream_meter = self.global_meter
     # check dependency ids for unknown components outside of the engine context
     all_ids = {c.id for c in self.components}
     for component in self.components:
@@ -442,7 +451,7 @@ class FixedRateLimiter(Component):
 
 class AdaptiveRateLimiter(Component):
 
-  def __init__(self, downstream_meter, initial_rate=30, delta=0.1, target_qsize=0.1, drop=True, print_stats_interval=0):
+  def __init__(self, downstream_meter=None, initial_rate=30, delta=0.1, target_qsize=0.1, drop=True, print_stats_interval=0):
     super().__init__()
     self.downstream_meter = downstream_meter
     self.initial_rate = initial_rate
