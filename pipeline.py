@@ -42,15 +42,45 @@ def ts():
   return time.monotonic() - _START_TIME
 
 
-class FrameData(types.SimpleNamespace):
+class FrameData:
+  _initialized = False
+
+  def __init__(self):
+    self._data = {}
+    self._initialized = True
+
+  def set(self, key, value):
+    if not self._initialized:
+      raise RuntimeError("Cannot set data before FrameData is initialized.")
+    self._data[key] = value
+
+  def get(self, key):
+    if not self._initialized:
+      raise RuntimeError("Cannot get data before FrameData is initialized.")
+    if key not in self._data:
+      raise KeyError(f"Key '{key}' not in FrameData.")
+    return self._data[key]
+
   def __contains__(self, item):
-    return hasattr(self, item)
+    return item in self._data
 
   def __getitem__(self, item):
-    return getattr(self, item)
+    return self.get(item)
 
   def __setitem__(self, key, value):
-    setattr(self, key, value)
+    self.set(key, value)
+
+  def __getattr__(self, item):
+    #print('getattr', item, 'initialized:', self._initialized)
+    if self._initialized:
+      return self.get(item)
+    return super().__getattribute__(item)
+
+  def __setattr__(self, key, value):
+    if self._initialized:
+      self.set(key, value)
+    else:
+      super().__setattr__(key, value)
 
 
 class Item:

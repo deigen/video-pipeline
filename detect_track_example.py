@@ -3,11 +3,13 @@ import pipeline as pl
 
 from detector import HFDetector
 from tracker import Tracker
+from child_process import MP
 
 from components import FrameReader, Counter, Sleep, Print, Detector
 
 def main():
-    detector = Detector(HFDetector, model_name='facebook/detr-resnet-50', score_threshold=0.5)
+    #detector = Detector(HFDetector, model_name='facebook/detr-resnet-50', score_threshold=0.5)
+    detector = MP(HFDetector, model_name='PekingU/rtdetr_v2_r18vd', score_threshold=0.5)
     tracker = Tracker()
 
     meter = pl.ThroughputMeter()

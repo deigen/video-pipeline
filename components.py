@@ -90,23 +90,6 @@ class ExecuteIfReady(pl.Component):
       data.processed_frame = False
 
 
-class Detector(pl.Component):
-
-  def __init__(self, model_cls, **kwargs):
-    super().__init__()
-    self.model_cls = model_cls
-    self.model_kwargs = kwargs
-    self.thread_local = threading.local()
-
-  def thread_init(self):
-    self.thread_local.model = child_process.Process(self.model_cls, **self.model_kwargs)
-
-  def process(self, data):
-    frame = data.frame
-    detections = self.thread_local.model.detect(frame)
-    data.detections = detections
-
-
 #video = video_utils.stream_frames_from_file('demo.mp4')
 #def _teststream():
 #  while True:
