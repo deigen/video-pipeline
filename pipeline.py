@@ -10,6 +10,12 @@ import traceback
 import types
 import weakref
 
+try:
+    import torch
+    have_torch = True
+except ImportError:
+    have_torch = False
+
 logging.basicConfig(level=os.environ.get('LOGLEVEL', 'INFO').upper())
 
 
@@ -84,6 +90,30 @@ class FrameData:
       self.set(key, value)
     else:
       super().__setattr__(key, value)
+
+  def __getstate__(self):
+    state = self.__dict__.copy()
+    if have_torch:
+        # Ensure that tensors are cloned to avoid cross-process issues
+        # Right now cuda tensors can be sent and received between 2 procs, but not passed to a 3rd proc
+        state = find_tensors(state, lambda t: t.clone() if t.is_cuda else t)
+    return state
+
+
+def find_tensors(obj, callback, parent=None, index=None):
+    if isinstance(obj, torch.Tensor):
+        obj = callback(obj)
+        if obj is not None:
+            parent[index] = obj
+    elif isinstance(obj, dict):
+        for k, v in obj.items():
+            find_tensors(v, callback, obj, k)
+    elif isinstance(obj, (list, tuple)):
+        for i, v in enumerate(obj):
+            find_tensors(v, callback, obj, i)
+    elif hasattr(obj, '__dict__'):
+        find_tensors(obj.__dict__, callback)
+    return obj
 
 
 class Item:

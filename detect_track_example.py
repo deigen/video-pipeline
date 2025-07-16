@@ -10,7 +10,7 @@ from multiprocess import MP
 def main():
     #detector = Detector(HFDetector, model_name='facebook/detr-resnet-50', score_threshold=0.5)
     detector = MP(HFDetector, model_name='PekingU/rtdetr_v2_r18vd', score_threshold=0.5)
-    tracker = Tracker()
+    tracker = MP(Tracker)
 
     meter = pl.ThroughputMeter()
 
