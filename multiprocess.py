@@ -25,7 +25,7 @@ import traceback
 import pipeline as pl
 
 
-class MP(pl.Component):
+class Multiprocess(pl.Component):
 
     def __init__(self, cls, **init_kwargs):
         super().__init__()
@@ -39,6 +39,12 @@ class MP(pl.Component):
 
     def process(self, data):
         self.thread_local.instance.process(data)
+
+    def num_instances(self, n):
+        # processes will be created in thread_init, one for each component thread
+        self.num_threads(n)  # our component threads are 1-1 with child processes
+        return self
+
 
 
 def start_process(cls, *args, **kwargs):

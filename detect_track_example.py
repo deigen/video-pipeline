@@ -5,12 +5,15 @@ from detector import HFDetector
 from tracker import Tracker
 
 from components import FrameReader, Counter, Sleep, Print
-from multiprocess import MP
+from multiprocess import Multiprocess
 
 def main():
     #detector = Detector(HFDetector, model_name='facebook/detr-resnet-50', score_threshold=0.5)
-    detector = MP(HFDetector, model_name='PekingU/rtdetr_v2_r18vd', score_threshold=0.5)
-    tracker = MP(Tracker)
+    detector = Multiprocess(HFDetector, model_name='PekingU/rtdetr_v2_r18vd', score_threshold=0.5)
+    detector.num_instances(2)
+
+    tracker = Multiprocess(Tracker)
+    tracker.num_instances(1)  # tracker has to be single instance to see all detections sequentially
 
     meter = pl.ThroughputMeter()
 
@@ -26,10 +29,10 @@ def main():
     last = (
       source >> Counter()
       >> pl.AdaptiveRateLimiter(meter, initial_rate=30, print_stats_interval=1.0)
-      >> detector.num_threads(2)
+      >> detector
       >> tracker
-      >> meter
       >> Print(lambda data: f'{len(data.tracked_objects.tracker_id)} objects tracked, latency: {pl.ts() - data.create_time:.3f}, throughput: {meter.get():.3f}')
+      >> meter
     )
 
     engine = pl.PipelineEngine()
