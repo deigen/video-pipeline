@@ -71,10 +71,7 @@ class MPComponentClient:
                 setattr(send_data, field, getattr(data, field))
         for code, result in self._call('process', (send_data,), kwargs):
             if code == 'return':
-                assert isinstance(result, pl.FrameData), f"Expected FrameData, got {type(result)}"
-                for field in self._data_fields:
-                    if hasattr(result, field):
-                        setattr(data, field, getattr(result, field))
+                return result
             elif code == 'fetch_data':
                 assert isinstance(result, list), f"Expected list of fields, got {type(result)}"
                 send_data = pl.FrameData()
@@ -101,7 +98,7 @@ class MPComponentClient:
             code, result = self._parent_conn.recv()
             if code == 'error':
                 assert isinstance(result, Exception), f"Expected an exception, got {result}"
-                raise result from result
+                raise result
             yield code, result
 
     def wait_for_ready(self):
@@ -141,7 +138,7 @@ def _child_process_server_loop(cls, init_args, init_kwargs, child_conn):
             print("Child process received EOF, exiting.")
             break
         except Exception as e:
-            #print(e, traceback.format_exc())
+            print(e, traceback.format_exc())
             child_conn.send(('error', e))
 
 
@@ -179,6 +176,15 @@ class _LazyFrameData(pl.FrameData):
         #print('   setting field:', item, 'to', result[item])
         super().set(item, result[item])  # set without adding to _changed_fields
         return getattr(self, item)
+
+    def has(self, key):
+        if key in self._data:
+            return True
+        try:
+            self.get(key)  # This will fetch the item if not present
+        except KeyError:
+            return False
+        return key in self._data
 
     def _get_changed_data(self):
         data = pl.FrameData()

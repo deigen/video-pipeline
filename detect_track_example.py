@@ -3,9 +3,9 @@ import pipeline as pl
 
 from detector import HFDetector
 from tracker import Tracker
-from child_process import MP
 
 from components import FrameReader, Counter, Sleep, Print
+from multiprocess import MP
 
 def main():
     #detector = Detector(HFDetector, model_name='facebook/detr-resnet-50', score_threshold=0.5)

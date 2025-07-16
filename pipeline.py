@@ -50,19 +50,22 @@ class FrameData:
     self._initialized = True
 
   def set(self, key, value):
-    if not self._initialized:
-      raise RuntimeError("Cannot set data before FrameData is initialized.")
+    assert self._initialized
     self._data[key] = value
 
   def get(self, key):
-    if not self._initialized:
-      raise RuntimeError("Cannot get data before FrameData is initialized.")
+    assert self._initialized
+    #print('count:', self._data.get('count'), 'get field:', key, 'data:', self._data.keys())
     if key not in self._data:
       raise KeyError(f"Key '{key}' not in FrameData.")
     return self._data[key]
 
+  def has(self, key):
+    assert self._initialized
+    return key in self._data
+
   def __contains__(self, item):
-    return item in self._data
+    return self.has(item)
 
   def __getitem__(self, item):
     return self.get(item)

@@ -2,7 +2,6 @@ import threading
 import time
 import types
 
-import child_process
 import pipeline as pl
 #from clarifai.utils import video_utils
 
