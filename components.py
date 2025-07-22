@@ -45,7 +45,7 @@ class Print(pl.Component):
     if isinstance(self.message, types.FunctionType):
       print(self.message(data))
     elif isinstance(self.message, str):
-      print(self.message % data._data)
+      print(self.message.format(data=data))
     elif self.message is None:
       print(data)
     self.last_print = pl.ts()

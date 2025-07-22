@@ -29,8 +29,7 @@ def main():
         | pl.AdaptiveRateLimiter(initial_rate=30, print_stats_interval=1.0)
         | detector
         | tracker
-        | Print()
-        | Print(lambda data: f'{len(data.tracked_objects.tracker_id)} objects tracked, latency: {pl.ts() - data.create_time:.3f}, throughput: {engine.global_meter.get():.3f} FPS')
+        | Print(lambda data: f'FRAME {data.count}: {len(data.tracked_objects.tracker_id)} objects tracked, latency: {pl.ts() - data.create_time:.3f}, throughput: {engine.global_meter.get():.3f} FPS')
     )
 
     engine = pl.PipelineEngine(pipeline)
