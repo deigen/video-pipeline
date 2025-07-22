@@ -350,7 +350,7 @@ class Component:
       self.threads.append(thread)
       thread.start()
 
-  def thread_init(self):
+  def pipeline_thread_init(self):
     '''
     This method is called once per thread before the run loop starts.
     Subclasses can override this to perform thread-specific initialization.
@@ -358,7 +358,7 @@ class Component:
     pass
 
   def run_loop(self):
-    self.thread_init()
+    self.pipeline_thread_init()
     while True:
       try:
         item = self.queue.get()  # blocking get for the next item

@@ -1,19 +1,33 @@
 '''
-Server that proxies a class in a child process.
+Multiprocess component for the pipelines.
 
-Example usage:
+This component allows you to run a class in a separate process, enabling
+parallel processing of data.  As for all components, the class must
+implement a `process` method that takes a `FrameData` object as input.
 
-class MyClass:
+The `Multiprocess` component can create multiple instances of the class, each running
+in their own process.  Only data fields that are used by the child process
+are sent to the child process, and only fields that are set in the child are sent back.
+
+Usage:
+
+from multiprocess import Multiprocess
+
+class MyClass(pl.Component):
     def __init__(self, value):
-        # init runs in the child process
         self.value = value
-        
-    def f(self, x):
-        # method runs in the child process
-        return self.value + x
 
-client = child_process.Process(MyClass, 10)  # client is a proxy to MyClass in the child process
-result = client.f(5)  # result is 15, computed in the child process
+    def process(self, data):
+        # Simulate some processing
+        data.y = self.value + data.x
+
+# Create a Multiprocess component
+mp = Multiprocess(MyClass, value=10)
+mp.num_instances(4)  # Set the number of instances (processes)
+
+# "mp" is now a component that can be used in a pipeline.
+# Each instance of MyClass runs in its own process; only data fields that
+# are accessed or set will be sent to (or back from) the child process.
 '''
 
 import os
@@ -34,7 +48,7 @@ class Multiprocess(pl.Component):
         self.thread_local = threading.local()
         self._data_fields = set()
 
-    def thread_init(self):
+    def pipeline_thread_init(self):
         self.thread_local.instance = start_process(self.cls, **self.init_kwargs)
 
     def process(self, data):
@@ -42,7 +56,7 @@ class Multiprocess(pl.Component):
 
     def num_instances(self, n):
         # processes will be created in thread_init, one for each component thread
-        self.num_threads(n)  # our component threads are 1-1 with child processes
+        self.num_threads(n)  # child processes are 1-1 with component threads
         return self
 
 
