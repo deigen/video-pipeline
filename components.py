@@ -115,18 +115,18 @@ def test():
     #return f'SINK  t:{data.frame.time}   processed:{data.processed_frame}   latency: {pl.ts() - data.create_time:.3f}  throughput: {meter.get():.3f}'
     return f'SINK  c:{data.count}  latency: {pl.ts() - data.create_time:.3f}  throughput: {meter.get():.3f}  meter2: {meter2.get():.3f}  sleeps: {data.sleeps}'
 
-  #source = (FrameReader(video) >> pl.FixedRateLimiter(30))
+  #source = (FrameReader(video) | pl.FixedRateLimiter(30))
   #source = FrameReader(video)
 
-  last = (
-      #source >> Counter()  #>> pl.AdaptiveRateLimiter(meter, initial_rate=30, drop=False)
-      Sleep(1/100.) >> Counter()
-      >> pl.AdaptiveRateLimiter(meter, initial_rate=100, print_stats_interval=1.0)
-      >> meter2
-      >> Sleep(0.03)
-      >> meter #>> Print(_print_msg)
+  pipeline = (
+      #source | Counter()  #| pl.AdaptiveRateLimiter(meter, initial_rate=30, drop=False)
+      Sleep(1/100.)
+      | Counter()
+      | pl.AdaptiveRateLimiter(meter, initial_rate=100, print_stats_interval=1.0)
+      | meter2
+      | Sleep(0.03)
+      | meter #| Print(_print_msg)
   )
 
-  engine = pl.PipelineEngine()
-  engine.add_component(last)
+  engine = pl.PipelineEngine(pipeline)
   engine.run()

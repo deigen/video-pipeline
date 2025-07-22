@@ -345,7 +345,7 @@ class Component:
     self.dependencies.add(other)
     return self
 
-  def __rshift__(self, other):
+  def __or__(self, other):
     other.depends_on(self)
     return ComponentRange(self, other)
 
@@ -412,7 +412,7 @@ class ComponentRange:
       raise TypeError(f"depends_on() expects a Component or ComponentRange, got {type(other)}")
     return self
 
-  def __rshift__(self, other):
+  def __or__(self, other):
     if isinstance(other, ComponentRange):
       other.start.depends_on(self.end)
       return ComponentRange(self.start, other.end)

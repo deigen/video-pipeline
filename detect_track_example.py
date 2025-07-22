@@ -22,14 +22,15 @@ def main():
             for frame in container.decode(video=0):
                 yield frame.to_image()  # Convert to PIL Image
 
-    source = (FrameReader(video_frames_loop()) >> pl.FixedRateLimiter(30))
+    source = (FrameReader(video_frames_loop()) | pl.FixedRateLimiter(30))
 
     pipeline = (
-      source >> Counter()
-      >> pl.AdaptiveRateLimiter(initial_rate=30, print_stats_interval=1.0)
-      >> detector
-      >> tracker
-      >> Print(lambda data: f'{len(data.tracked_objects.tracker_id)} objects tracked, latency: {pl.ts() - data.create_time:.3f}, throughput: {engine.global_meter.get():.3f} FPS')
+        source
+        | Counter()
+        | pl.AdaptiveRateLimiter(initial_rate=30, print_stats_interval=1.0)
+        | detector
+        | tracker
+        | Print(lambda data: f'{len(data.tracked_objects.tracker_id)} objects tracked, latency: {pl.ts() - data.create_time:.3f}, throughput: {engine.global_meter.get():.3f} FPS')
     )
 
     engine = pl.PipelineEngine(pipeline)
