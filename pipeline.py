@@ -142,13 +142,15 @@ class Item:
 
 class PipelineEngine:
 
-  def __init__(self, max_buffer_size=None):
+  def __init__(self, components=None, max_buffer_size=None):
     self.work_buffer = []  # buffer for work items
     self.components = []  # list of all components
     self.changed_event = threading.Event()
     self.max_buffer_size = max_buffer_size
     self.running = True
     self.global_meter = ThroughputMeter()  # overall throughput meter for the engine
+    if components is not None:
+      self.add(components)
 
   def add(self, component_or_range):
     '''

@@ -32,8 +32,7 @@ def main():
       >> Print(lambda data: f'{len(data.tracked_objects.tracker_id)} objects tracked, latency: {pl.ts() - data.create_time:.3f}, throughput: {engine.global_meter.get():.3f} FPS')
     )
 
-    engine = pl.PipelineEngine()
-    engine.add(pipeline)
+    engine = pl.PipelineEngine(pipeline)
     engine.run()
 
 if __name__ == "__main__":
