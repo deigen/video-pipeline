@@ -33,7 +33,7 @@ class Sleep(pl.Component):
 
 class Print(pl.Component):
 
-  def __init__(self, message, interval=None):
+  def __init__(self, message=None, interval=None):
     super().__init__()
     self.message = message
     self.interval = interval
@@ -44,8 +44,10 @@ class Print(pl.Component):
       return
     if isinstance(self.message, types.FunctionType):
       print(self.message(data))
-    else:
-      print(self.message)
+    elif isinstance(self.message, str):
+      print(self.message % data._data)
+    elif self.message is None:
+      print(data)
     self.last_print = pl.ts()
     #print(f'{data.count}  latency: {pl.ts() - data.create_time:.3f}  throughput: {meter.get():.3f}')
 

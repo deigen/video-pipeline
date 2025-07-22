@@ -66,6 +66,12 @@ class FrameData:
       raise KeyError(f"Key '{key}' not in FrameData.")
     return self._data[key]
 
+  def pop(self, key):
+    assert self._initialized
+    if key not in self._data:
+      raise KeyError(f"Key '{key}' not in FrameData.")
+    return self._data.pop(key)
+
   def has(self, key):
     assert self._initialized
     return key in self._data
@@ -98,6 +104,9 @@ class FrameData:
         # Right now cuda tensors can be sent and received between 2 procs, but not passed to a 3rd proc
         state = find_tensors(state, lambda t: t.clone() if t.is_cuda else t)
     return state
+
+  def __repr__(self):
+    return f"FrameData({', '.join(f'{k}={v}' for k, v in self._data.items())})"
 
 
 def find_tensors(obj, callback, parent=None, index=None):
@@ -329,6 +338,7 @@ class Component:
     self.engine = None
     self.queue_size = queue_size
     self.num_threads(num_threads)  # sets num_threads and self.queue
+    self._fields_map = None
     self.dependencies = set()
     self.average_qsize = 0
     self.threads = []
@@ -339,6 +349,12 @@ class Component:
     self._num_threads = num_threads
     queue_size = self.queue_size or 2 * num_threads
     self.queue = queue.Queue(maxsize=queue_size)
+    return self
+
+  def fields(self, **fields_map):
+    if self._fields_map is None:
+      self._fields_map = {}
+    self._fields_map.update(fields_map)
     return self
 
   def depends_on(self, other):
@@ -379,7 +395,7 @@ class Component:
         item = self.queue.get()  # blocking get for the next item
         item.set_state(self.id, State.STARTED)
         try:
-          self.process(item.data)
+          self._process(item.data)
         except Drop:
           item.set_state(self.id, State.DROPPED)
         except Exception as e:
@@ -393,6 +409,23 @@ class Component:
       except Exception:
         logging.exception('Internal error in component %s', self.id)
         time.sleep(1)
+
+  def _process(self, item_data):
+    if not self._fields_map:
+      self.process(item_data)
+      return
+
+    # map between data and component fields names
+    data = FrameData()
+    data._data.update(item_data._data)  # copy existing data fields
+    for comp_key, data_key in self._fields_map.items():
+      if data_key in item_data:
+        data.set(comp_key, data.pop(data_key))
+    self.process(data)
+    for comp_key, data_key in self._fields_map.items():
+      if comp_key in data:
+        data.set(data_key, data.pop(comp_key))
+    item_data._data.update(data._data)  # update original item data with processed fields
 
   def process(self, item_data):
     raise NotImplementedError("Subclasses must implement this method.")
@@ -420,7 +453,7 @@ class ComponentRange:
       other.depends_on(self.end)
       return ComponentRange(self.start, other)
     else:
-      raise TypeError(f"a >> b expected a Component or ComponentRange, got {type(other)}")
+      raise TypeError(f"a | b expected a Component or ComponentRange, got {type(other)}")
 
   def __repr__(self):
     return f"ComponentRange({self.start.id}, {self.end.id})"
