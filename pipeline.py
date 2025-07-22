@@ -150,6 +150,19 @@ class PipelineEngine:
     self.running = True
     self.global_meter = ThroughputMeter()  # overall throughput meter for the engine
 
+  def add(self, component_or_range):
+    '''
+    Add a component or a ComponentRange to the pipeline engine.
+    If a ComponentRange is provided, all components in the range will be added.
+    '''
+    if isinstance(component_or_range, ComponentRange):
+      self.add_component(component_or_range.end, recursive=True)
+      assert component_or_range.start in self.components, "ComponentRange start should have been added by recursive add."
+    elif isinstance(component_or_range, Component):
+      self.add_component(component_or_range, recursive=True)
+    else:
+      raise TypeError(f"Expected Component or ComponentRange, got {type(component_or_range)}")
+
   def add_component(self, component, recursive=True):
     if component in self.components:
       assert component.engine is self
@@ -332,7 +345,7 @@ class Component:
 
   def __rshift__(self, other):
     other.depends_on(self)
-    return other
+    return ComponentRange(self, other)
 
   def enqueue(self, item):
     try:
@@ -381,6 +394,34 @@ class Component:
 
   def process(self, item_data):
     raise NotImplementedError("Subclasses must implement this method.")
+
+
+class ComponentRange:
+  def __init__(self, start, end):
+    self.start = start
+    self.end = end
+
+  def depends_on(self, other):
+    if isinstance(other, ComponentRange):
+      self.start.depends_on(other.end)
+    elif isinstance(other, Component):
+      self.start.depends_on(other)
+    else:
+      raise TypeError(f"depends_on() expects a Component or ComponentRange, got {type(other)}")
+    return self
+
+  def __rshift__(self, other):
+    if isinstance(other, ComponentRange):
+      other.start.depends_on(self.end)
+      return ComponentRange(self.start, other.end)
+    elif isinstance(other, Component):
+      other.depends_on(self.end)
+      return ComponentRange(self.start, other)
+    else:
+      raise TypeError(f"a >> b expected a Component or ComponentRange, got {type(other)}")
+
+  def __repr__(self):
+    return f"ComponentRange({self.start.id}, {self.end.id})"
 
 
 class ThroughputMeter(Component):

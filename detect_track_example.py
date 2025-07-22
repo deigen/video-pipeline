@@ -24,7 +24,7 @@ def main():
 
     source = (FrameReader(video_frames_loop()) >> pl.FixedRateLimiter(30))
 
-    last = (
+    pipeline = (
       source >> Counter()
       >> pl.AdaptiveRateLimiter(initial_rate=30, print_stats_interval=1.0)
       >> detector
@@ -33,7 +33,7 @@ def main():
     )
 
     engine = pl.PipelineEngine()
-    engine.add_component(last)
+    engine.add(pipeline)
     engine.run()
 
 if __name__ == "__main__":
