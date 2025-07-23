@@ -134,6 +134,7 @@ class MPComponentClient:
 
 def _child_process_server_loop(cls, init_args, init_kwargs, child_conn):
     instance = cls(*init_args, **init_kwargs)
+    instance.pipeline_thread_init()  # in-thread component init callback
     while True:
         try:
             method_name, method_args, method_kwargs = child_conn.recv()
