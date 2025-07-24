@@ -24,6 +24,13 @@ class Drop(Exception):
   Exception to signal that the current item was dropped/skipped by the component.
   '''
 
+class StreamEnd(Exception):
+  '''
+  Exception to signal that the end of the stream was reached.
+  This can be used by a component to indicate that no more items will be processed,
+  for example a reader source that reaches the end of a video file.
+  '''
+
 
 class State(enum.Enum):
   NONE = 0
@@ -156,8 +163,10 @@ class PipelineEngine:
     self.components = []  # list of all components
     self.changed_event = threading.Event()
     self.max_buffer_size = max_buffer_size
-    self.running = True
     self.global_meter = ThroughputMeter()  # overall throughput meter for the engine
+    self.running = None
+    self.done_callback = None  # callback to check if the pipeline is done
+    self.is_done = False # set to True once the callback returns True
     if components is not None:
       self.add(components)
 
@@ -185,18 +194,40 @@ class PipelineEngine:
       for c in component.dependencies:
         self.add_component(c)
 
+  def run_until(self, done_callback):
+    '''
+    Run the pipeline until the done_callback returns True.
+
+    After the callback returns True, the pipeline will stop processing new items,
+    but will finish processing all items that are already in the pipeline buffer.
+    '''
+    self.done_callback = done_callback
+    self.run()
+
   def run(self):
+    '''
+    Main loop of the pipeline engine.
+
+    Starts all components, and enters the main loop that processes items.
+    The loop runs in the calling thread, and will not return until the pipeline finishes.
+    '''
     self._current_loop_start = 0
     self._verify_components()
+
     if self.max_buffer_size is None:
       self.max_buffer_size = sum(c.queue.maxsize for c in self.components)
+
+    self.running = True
+    self.is_done = False
     try:
       for component in self.components:
         logging.debug("Starting component %s", component.id)
         component.start()
       self.changed_event.set()
-      while True:
+      # main loop runs until is_done() is True and there are no items left to process
+      while not self.is_done or self.work_buffer:
         self.changed_event.wait()
+        self._check_done()
         if self._current_loop_start == ts():
           # loop rounds faster than the time resolution, wait so time is always monotonic
           time.sleep(1e-6)
@@ -210,11 +241,30 @@ class PipelineEngine:
     finally:
       self.running = False
 
+    # after done, call all end() methods of components to clean up resources
+    for component in self.components:
+      if hasattr(component, 'end'):
+        try:
+          component.end()
+        except Exception as e:
+          logging.error(f"Error in component {component.id} end method: {e}")
+
   def callback(self, item, component_id):
     # called upon item completion, failure, or drop by a component to signal a state change
     self.changed_event.set()
 
+  def _check_done(self):
+    if self.is_done:
+      return True
+    if self.done_callback is not None:
+       self.is_done = self.done_callback()
+    return self.is_done
+
   def _start_items(self, new=1):
+    if self.is_done:
+      # if we reach the done condition, stop adding new items to the work buffer
+      # and let the existing items finish processing
+      return
     while (len(self.work_buffer) < self.max_buffer_size and
            (len(self.work_buffer) < new or
             any(s[0].value for s in self.work_buffer[-new].states.values()))):
@@ -332,16 +382,17 @@ class Component:
   _ID_COUNTER = map(str, itertools.count())
   _ALL_COMPONENTS = {}
 
-  def __init__(self, num_threads=1, queue_size=None):
+  def __init__(self, queue_size=None):
     self.id = self.__class__.__name__ + '-' + next(Component._ID_COUNTER)
     Component._ALL_COMPONENTS[self.id] = weakref.ref(self)
     self.engine = None
     self.queue_size = queue_size
-    self.num_threads(num_threads)  # sets num_threads and self.queue
+    self.num_threads(1)  # sets up num_threads and self.queue to initial values
     self._fields_map = None
     self.dependencies = set()
     self.average_qsize = 0
     self.threads = []
+    self.is_done = False
 
   def num_threads(self, num_threads):
     assert num_threads > 0
@@ -395,9 +446,14 @@ class Component:
         item = self.queue.get()  # blocking get for the next item
         item.set_state(self.id, State.STARTED)
         try:
+          if self.is_done:
+            raise Drop
           self._process(item.data)
         except Drop:
           item.set_state(self.id, State.DROPPED)
+        except StreamEnd:
+          item.set_state(self.id, State.DROPPED)
+          self.is_done = True
         except Exception as e:
           item.error = e
           item.set_state(self.id, State.FAILED)
@@ -429,6 +485,17 @@ class Component:
 
   def process(self, item_data):
     raise NotImplementedError("Subclasses must implement this method.")
+
+
+class Function(Component):
+  '''
+  Component that wraps a function to be called in the pipeline.
+  The function should accept a single argument, which is the FrameData object.
+  '''
+
+  def __init__(self, func):
+    super().__init__()
+    self.process = func
 
 
 class ComponentRange:

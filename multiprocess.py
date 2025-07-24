@@ -45,17 +45,24 @@ class Multiprocess(pl.Component):
         super().__init__()
         self.cls = cls
         self.init_kwargs = init_kwargs
-        self.thread_local = threading.local()
+        self.instances = {}  # maps thread id to process client
         self._data_fields = set()
 
     def pipeline_thread_init(self):
-        self.thread_local.instance = start_process(self.cls, **self.init_kwargs)
+        client = start_process(self.cls, **self.init_kwargs)
+        self.instances[id(threading.current_thread())] = client
 
     def process(self, data):
-        self.thread_local.instance.process(data)
+        instance = self.instances[id(threading.current_thread())]
+        instance.process(data)
+
+    def end(self):
+        # Close all child processes
+        for instance in self.instances.values():
+            instance.exit()
 
     def num_instances(self, n):
-        # processes will be created in thread_init, one for each component thread
+        # processes will be created in pipeline_thread_init, one for each component thread
         self.num_threads(n)  # child processes are 1-1 with component threads
         return self
 
@@ -140,6 +147,8 @@ def _child_process_server_loop(cls, init_args, init_kwargs, child_conn):
             method_name, method_args, method_kwargs = child_conn.recv()
             #print('Child process received:', method_name, method_args, method_kwargs)
             if method_name == 'exit':
+                if hasattr(instance, 'end'):
+                    instance.end()
                 break
             if method_name == 'ready':
                 child_conn.send(('return', 'ready'))

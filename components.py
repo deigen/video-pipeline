@@ -62,7 +62,7 @@ class FrameReader(pl.Component):
     try:
       data.frame = next(self.video_frames_generator)
     except StopIteration:
-      raise pl.Drop
+      raise pl.StreamEnd('End of video stream reached')
 
 
 class ExecuteIfReady(pl.Component):
