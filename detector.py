@@ -18,7 +18,7 @@ class HFDetector(pl.Component):
             model_name (str): Name of the model to use. Defaults to 'facebook/detr-resnet-50'.
             device (str): Device to load the model on ('cpu' or 'cuda').
         """
-        from transformers import (AutoImageProcessor, AutoModelForObjectDetection)
+        from transformers import AutoImageProcessor, AutoModelForObjectDetection
 
         super().__init__()
 

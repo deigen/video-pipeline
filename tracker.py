@@ -1,6 +1,5 @@
 import numpy as np
 import supervision as sv
-from PIL import Image
 
 import pipeline as pl
 
@@ -44,9 +43,6 @@ def test():
     """
     Test the Tracker component with a sample image and detections.
     """
-    # Create a sample image
-    image = Image.new('RGB', (640, 480), color='white')
-
     # Create sample detections
     detections = sv.Detections(
         xyxy=np.array([[100, 100, 200, 200], [300, 300, 400, 400]]),

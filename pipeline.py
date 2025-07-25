@@ -341,7 +341,7 @@ class PipelineEngine:
             for dep in component.dependencies:
                 if dep.id not in all_ids:
                     raise Exception(
-                        f"Component {component.id} depends on unknown component {dep_id} not part of the engine."
+                        f"Component {component.id} depends on unknown component {dep.id} not part of the engine."
                     )
         # check for cycles
         self._check_cycles()
