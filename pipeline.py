@@ -213,6 +213,7 @@ class PipelineEngine:
         The loop runs in the calling thread, and will not return until the pipeline finishes.
         '''
         self._current_loop_start = 0
+        self._add_global_meter()
         self._verify_components()
 
         if self.max_buffer_size is None:
@@ -324,7 +325,7 @@ class PipelineEngine:
             logging.debug("cleaning %s", self.work_buffer[:num_remove])
             del self.work_buffer[:num_remove]
 
-    def _verify_components(self):
+    def _add_global_meter(self):
         # add global meter behind every component
         for component in self.components:
             self.global_meter.depends_on(component)
@@ -336,6 +337,8 @@ class PipelineEngine:
                 and component.downstream_meter is None
             ):
                 component.downstream_meter = self.global_meter
+
+    def _verify_components(self):
         # check dependency ids for unknown components outside of the engine context
         all_ids = {c.id for c in self.components}
         for component in self.components:
