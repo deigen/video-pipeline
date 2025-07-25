@@ -181,7 +181,9 @@ class PipelineEngine:
         elif isinstance(component_or_range, Component):
             self.add_component(component_or_range, recursive=True)
         else:
-            raise TypeError(f"Expected Component or ComponentRange, got {type(component_or_range)}")
+            raise TypeError(
+                f"Expected Component or ComponentRange, got {type(component_or_range)}"
+            )
 
     def add_component(self, component, recursive=True):
         if component in self.components:
@@ -282,13 +284,19 @@ class PipelineEngine:
                 if item.get_state(component_id) >= State.QUEUED:
                     # already scheduled this item, check next in buffer list
                     continue
-                if all(item.get_state(dep.id) == State.COMPLETED for dep in component.dependencies):
+                if all(
+                    item.get_state(dep.id) == State.COMPLETED
+                    for dep in component.dependencies
+                ):
                     # all dependencies are completed, we can schedule this item
                     item.set_state(
                         component_id, State.PENDING
                     )  # may or may not be queued here now, always mark as pending first
                     component.enqueue(item)
-                elif any(item.get_state(dep.id) == State.DROPPED for dep in component.dependencies):
+                elif any(
+                    item.get_state(dep.id) == State.DROPPED
+                    for dep in component.dependencies
+                ):
                     # propagate dropped in dep chain, and continue checking next item
                     item.set_state(component_id, State.DROPPED)
                 else:
@@ -300,7 +308,8 @@ class PipelineEngine:
         num_remove = 0
         for item in self.work_buffer:
             if any(
-                s[0] in (State.PENDING, State.QUEUED, State.STARTED) for s in item.states.values()
+                s[0] in (State.PENDING, State.QUEUED, State.STARTED)
+                for s in item.states.values()
             ):
                 # this item, or others after it that are blocked by ordering, can still be processed
                 break
@@ -323,7 +332,9 @@ class PipelineEngine:
         self.add_component(self.global_meter, recursive=False)
         # AdaptiveRateLimiter requires a downstream meter, set to global meter by default
         for component in self.components:
-            if isinstance(component, AdaptiveRateLimiter) and component.downstream_meter is None:
+            if isinstance(
+                component, AdaptiveRateLimiter
+            ) and component.downstream_meter is None:
                 component.downstream_meter = self.global_meter
         # check dependency ids for unknown components outside of the engine context
         all_ids = {c.id for c in self.components}
@@ -490,7 +501,9 @@ class Component:
         for comp_key, data_key in self._fields_map.items():
             if comp_key in data:
                 data.set(data_key, data.pop(comp_key))
-        item_data._data.update(data._data)  # update original item data with processed fields
+        item_data._data.update(
+            data._data
+        )  # update original item data with processed fields
 
     def process(self, item_data):
         raise NotImplementedError("Subclasses must implement this method.")
@@ -530,7 +543,9 @@ class ComponentRange:
             other.depends_on(self.end)
             return ComponentRange(self.start, other)
         else:
-            raise TypeError(f"a | b expected a Component or ComponentRange, got {type(other)}")
+            raise TypeError(
+                f"a | b expected a Component or ComponentRange, got {type(other)}"
+            )
 
     def __repr__(self):
         return f"ComponentRange({self.start.id}, {self.end.id})"
@@ -602,8 +617,8 @@ class FixedRateLimiter(Component):
 
 class AdaptiveRateLimiter(Component):
     def __init__(
-        self, downstream_meter=None, initial_rate=30, delta=0.1, target_qsize=0.1, drop=True,
-        print_stats_interval=0
+        self, downstream_meter=None, initial_rate=30, delta=0.1, target_qsize=0.1,
+        drop=True, print_stats_interval=0
     ):
         super().__init__()
         self.downstream_meter = downstream_meter

@@ -28,7 +28,9 @@ class HFDetector(pl.Component):
         self.device = device
         self.score_threshold = score_threshold
 
-        self.image_processor = AutoImageProcessor.from_pretrained(model_name, use_fast=True)
+        self.image_processor = AutoImageProcessor.from_pretrained(
+            model_name, use_fast=True
+        )
         self.model = AutoModelForObjectDetection.from_pretrained(model_name)
 
         self.model.to(self.device)
@@ -53,7 +55,8 @@ class HFDetector(pl.Component):
         outputs = self.model(**inputs)
 
         results = self.image_processor.post_process_object_detection(
-            outputs, target_sizes=torch.tensor([(image.height, image.width)]), threshold=0.5
+            outputs, target_sizes=torch.tensor([(image.height, image.width)]),
+            threshold=0.5
         )
 
         return results[0] if singleton else results

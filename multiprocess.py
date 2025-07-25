@@ -71,7 +71,9 @@ def start_process(cls, *args, **kwargs):
 
     parent_conn, child_conn = ctx.Pipe()
 
-    proc = ctx.Process(target=_child_process_server_loop, args=(cls, args, kwargs, child_conn))
+    proc = ctx.Process(
+        target=_child_process_server_loop, args=(cls, args, kwargs, child_conn)
+    )
     proc.start()
 
     class _MPComponentClient(MPComponentClient):
@@ -98,7 +100,9 @@ class MPComponentClient:
             if code == 'return':
                 return result
             elif code == 'fetch_data':
-                assert isinstance(result, list), f"Expected list of fields, got {type(result)}"
+                assert isinstance(
+                    result, list
+                ), f"Expected list of fields, got {type(result)}"
                 send_data = pl.FrameData()
                 self._data_fields.update(result)  # save fields for sending
                 for field in result:
@@ -108,7 +112,9 @@ class MPComponentClient:
                         send_data[field] = e
                 self._parent_conn.send(('fill_data', send_data))
             elif code == 'fill_data':
-                assert isinstance(result, pl.FrameData), f"Expected FrameData, got {type(result)}"
+                assert isinstance(
+                    result, pl.FrameData
+                ), f"Expected FrameData, got {type(result)}"
                 for field in result._data.keys():
                     data[field] = result[field]
             else:
@@ -122,7 +128,9 @@ class MPComponentClient:
         while code != 'return':
             code, result = self._parent_conn.recv()
             if code == 'error':
-                assert isinstance(result, Exception), f"Expected an exception, got {result}"
+                assert isinstance(
+                    result, Exception
+                ), f"Expected an exception, got {result}"
                 raise result
             yield code, result
 
@@ -232,7 +240,9 @@ class _TestClass:
 
 def test():
 
-    client = start_process(_TestClass, 10)  # client is a proxy to MyClass in the child process
+    client = start_process(
+        _TestClass, 10
+    )  # client is a proxy to MyClass in the child process
     data = pl.FrameData()
     data.x = 5  # Set some initial data
     client.process(data)  # Call the process method in the child process

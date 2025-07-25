@@ -13,11 +13,15 @@ from tracker import Tracker
 
 def main():
     #detector = Detector(HFDetector, model_name='facebook/detr-resnet-50', score_threshold=0.5)
-    detector = Multiprocess(HFDetector, model_name='PekingU/rtdetr_v2_r18vd', score_threshold=0.5)
+    detector = Multiprocess(
+        HFDetector, model_name='PekingU/rtdetr_v2_r18vd', score_threshold=0.5
+    )
     detector.num_instances(2)
 
     tracker = Multiprocess(Tracker)
-    tracker.num_instances(1)  # tracker has to be single instance to see all detections sequentially
+    tracker.num_instances(
+        1
+    )  # tracker has to be single instance to see all detections sequentially
 
     video_file = 'test_data/venice2.mp4'
 
