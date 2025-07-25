@@ -331,9 +331,10 @@ class PipelineEngine:
         self.add_component(self.global_meter, recursive=False)
         # AdaptiveRateLimiter requires a downstream meter, set to global meter by default
         for component in self.components:
-            if isinstance(
-                component, AdaptiveRateLimiter
-            ) and component.downstream_meter is None:
+            if (
+                isinstance(component, AdaptiveRateLimiter)
+                and component.downstream_meter is None
+            ):
                 component.downstream_meter = self.global_meter
         # check dependency ids for unknown components outside of the engine context
         all_ids = {c.id for c in self.components}

@@ -13,3 +13,4 @@ split_before_first_argument = false
 allow_split_before_dict_value = true
 split_before_arithmetic_operator = true
 space_between_ending_comma_and_closing_bracket = false
+split_before_expression_after_opening_paren = false
