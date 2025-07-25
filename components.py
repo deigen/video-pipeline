@@ -52,6 +52,19 @@ class Print(pl.Component):
     #print(f'{data.count}  latency: {pl.ts() - data.create_time:.3f}  throughput: {meter.get():.3f}')
 
 
+class Breakpoint(pl.Component):
+
+  def __init__(self, condition=None):
+    super().__init__()
+    self.condition = condition
+
+  def process(self, data):
+    if self.condition and not self.condition(data):
+      return
+    breakpoint()
+    pass
+
+
 class FrameReader(pl.Component):
 
   def __init__(self, video_frames_generator):

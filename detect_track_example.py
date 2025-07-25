@@ -7,7 +7,7 @@ import supervision as sv
 from detector import HFDetector
 from tracker import Tracker
 
-from components import FrameReader, Counter, Sleep, Print
+from components import FrameReader, Counter, Sleep, Print, Breakpoint
 from multiprocess import Multiprocess
 
 def main():
@@ -35,7 +35,7 @@ def main():
         frame = box_annotator.annotate(frame, detections=data.tracked_objects)
         frame = label_annotator.annotate(frame, detections=data.tracked_objects)
         #data.annotated_frame = frame
-        output_file = f'{output_dir}/frame_{data.count:05d}.jpg'
+        output_file = f'{output_dir}/frame_{data.pts:05d}.jpg'
         with open(output_file, 'wb') as f:
             frame.save(f, format='JPEG')
 
@@ -43,14 +43,14 @@ def main():
 
     pipeline = (
         reader
-        #| pl.FixedRateLimiter(30)
-        | Counter()
-        #| pl.AdaptiveRateLimiter(initial_rate=30, print_stats_interval=1.0)
+        | pl.FixedRateLimiter(30)
+        | Counter().fields(count='pts')
+        | pl.AdaptiveRateLimiter(initial_rate=30, print_stats_interval=1.0)
         | detector
         | tracker
         | pl.Function(annotate).num_threads(4)
         #| FrameWriter(output_file).fields(frame='annotated_frame')
-        | Print(lambda data: f'FRAME {data.count}: {len(data.tracked_objects.tracker_id)} objects tracked, latency: {pl.ts() - data.create_time:.3f}, throughput: {engine.global_meter.get():.3f} FPS')
+        | Print(lambda data: f'FRAME {data.pts}: {len(data.tracked_objects.tracker_id)} objects tracked, {len(data.detections["boxes"])} detected, latency: {pl.ts() - data.create_time:.3f}, throughput: {engine.global_meter.get():.3f} FPS')
     )
 
     engine = pl.PipelineEngine(pipeline)

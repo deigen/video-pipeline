@@ -447,7 +447,7 @@ class Component:
         item.set_state(self.id, State.STARTED)
         try:
           if self.is_done:
-            raise Drop
+            raise StreamEnd
           self._process(item.data)
         except Drop:
           item.set_state(self.id, State.DROPPED)
