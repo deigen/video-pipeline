@@ -1,9 +1,10 @@
-import torch
 import numpy as np
 import supervision as sv
+import torch
 from PIL import Image
 
 import pipeline as pl
+
 
 class Tracker(pl.Component):
     def __init__(self):
@@ -40,7 +41,6 @@ class Tracker(pl.Component):
         data.tracked_objects = self.update(data.detections)
 
 
-
 def test():
     """
     Test the Tracker component with a sample image and detections.
@@ -50,8 +50,7 @@ def test():
 
     # Create sample detections
     detections = sv.Detections(
-        xyxy=np.array([[100, 100, 200, 200],
-                       [300, 300, 400, 400]]),
+        xyxy=np.array([[100, 100, 200, 200], [300, 300, 400, 400]]),
         confidence=np.array([0.8, 0.9]),
         class_id=np.array([10, 10]),
     )
@@ -66,6 +65,7 @@ def test():
         print(f"Frame {frame_num}:")
         for bbox, _, conf, cls, obj, _ in tracked_objects:
             print(f"  ID: {obj}, BBox: {bbox}, Confidence: {conf:.2f}, Class: {cls}")
+
 
 if __name__ == "__main__":
     test()

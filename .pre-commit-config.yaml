@@ -1,0 +1,21 @@
+repos:
+  - repo: https://github.com/google/yapf
+    rev: v0.40.2
+    hooks:
+      - id: yapf
+
+  - repo: https://github.com/pylint-dev/pylint
+    rev: v3.1.0
+    hooks:
+      - id: pylint
+
+  - repo: https://github.com/PyCQA/isort
+    rev: 6.0.1
+    hooks:
+      - id: isort
+
+  - repo: https://github.com/pycqa/flake8
+    rev: 7.0.0
+    hooks:
+      - id: flake8
+

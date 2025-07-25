@@ -30,9 +30,9 @@ mp.num_instances(4)  # Set the number of instances (processes)
 # are accessed or set will be sent to (or back from) the child process.
 '''
 
+import multiprocessing
 import os
 import sys
-import multiprocessing
 import threading
 import traceback
 
@@ -40,7 +40,6 @@ import pipeline as pl
 
 
 class Multiprocess(pl.Component):
-
     def __init__(self, cls, **init_kwargs):
         super().__init__()
         self.cls = cls
@@ -65,7 +64,6 @@ class Multiprocess(pl.Component):
         # processes will be created in pipeline_thread_init, one for each component thread
         self.num_threads(n)  # child processes are 1-1 with component threads
         return self
-
 
 
 def start_process(cls, *args, **kwargs):
@@ -178,7 +176,6 @@ class _LazyFrameData(pl.FrameData):
     This is used to avoid sending all data fields immediately, allowing for
     more efficient communication.
     """
-
     def __init__(self, conn, *args, **kwargs):
         self._changed_fields = set()  # fields that have been changed in this process
         self._conn = conn
@@ -242,6 +239,7 @@ def test():
     print(f"Processed data: y: {data.y}, x: {data.x}")
     assert data.y == 15, f"Expected 15, got {data.y}"  # Check the result
     assert data.x == 5, f"Expected 5, got {data.x}"  # Check that x is unchanged
+
 
 if __name__ == "__main__":
     test()

@@ -2,8 +2,8 @@
 Object Detection using HF models
 '''
 
-import torch
 import numpy as np
+import torch
 from PIL import Image
 
 import pipeline as pl
@@ -19,7 +19,8 @@ class HFDetector(pl.Component):
             model_name (str): Name of the model to use. Defaults to 'facebook/detr-resnet-50'.
             device (str): Device to load the model on ('cpu' or 'cuda').
         """
-        from transformers import AutoModelForObjectDetection, AutoImageProcessor
+        from transformers import (AutoImageProcessor,
+                                  AutoModelForObjectDetection)
 
         super().__init__()
 
@@ -33,7 +34,6 @@ class HFDetector(pl.Component):
 
         self.model.to(self.device)
         self.model.eval()
-
 
     @torch.no_grad()
     def detect(self, image):
@@ -53,10 +53,11 @@ class HFDetector(pl.Component):
 
         outputs = self.model(**inputs)
 
-        results = self.image_processor.post_process_object_detection(outputs, target_sizes=torch.tensor([(image.height, image.width)]), threshold=0.5)
+        results = self.image_processor.post_process_object_detection(
+            outputs, target_sizes=torch.tensor([(image.height, image.width)]), threshold=0.5
+        )
 
         return results[0] if singleton else results
-
 
     def process(self, data):
         """
@@ -78,11 +79,14 @@ def test():
     image = Image.open('test_data/sample.jpg')
     detector = HFDetector()
     detections = detector.detect(image)
-    
-    for score, label_id, box in zip(detections["scores"], detections["labels"], detections["boxes"]):
+
+    for score, label_id, box in zip(
+        detections["scores"], detections["labels"], detections["boxes"]
+    ):
         score, label = score.item(), label_id.item()
         box = [round(i, 2) for i in box.tolist()]
         print(f"{detector.model.config.id2label[label]}: {score:.2f} {box}")
+
 
 if __name__ == "__main__":
     test()

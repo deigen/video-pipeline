@@ -1,14 +1,15 @@
 import os
+
 import av
 import numpy as np
-import pipeline as pl
 import supervision as sv
 
+import pipeline as pl
+from components import Breakpoint, Counter, FrameReader, Print, Sleep
 from detector import HFDetector
+from multiprocess import Multiprocess
 from tracker import Tracker
 
-from components import FrameReader, Counter, Sleep, Print, Breakpoint
-from multiprocess import Multiprocess
 
 def main():
     #detector = Detector(HFDetector, model_name='facebook/detr-resnet-50', score_threshold=0.5)
@@ -19,17 +20,18 @@ def main():
     tracker.num_instances(1)  # tracker has to be single instance to see all detections sequentially
 
     video_file = 'test_data/venice2.mp4'
+
     def video_frames_loop():
         container = av.open(video_file)
         for frame in container.decode(video=0):
             yield frame.to_image()  # Convert to PIL Image
-
 
     box_annotator = sv.BoxAnnotator()
     label_annotator = sv.LabelAnnotator()
 
     output_dir = 'output'
     os.makedirs(output_dir, exist_ok=True)
+
     def annotate(data):
         frame = data.frame.copy()
         frame = box_annotator.annotate(frame, detections=data.tracked_objects)
@@ -50,7 +52,10 @@ def main():
         | tracker
         | pl.Function(annotate).num_threads(4)
         #| FrameWriter(output_file).fields(frame='annotated_frame')
-        | Print(lambda data: f'FRAME {data.pts}: {len(data.tracked_objects.tracker_id)} objects tracked, {len(data.detections["boxes"])} detected, latency: {pl.ts() - data.create_time:.3f}, throughput: {engine.global_meter.get():.3f} FPS')
+        | Print(
+            lambda data:
+            f'FRAME {data.pts}: {len(data.tracked_objects.tracker_id)} objects tracked, {len(data.detections["boxes"])} detected, latency: {pl.ts() - data.create_time:.3f}, throughput: {engine.global_meter.get():.3f} FPS'
+        )
     )
 
     engine = pl.PipelineEngine(pipeline)
