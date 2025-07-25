@@ -354,9 +354,9 @@ class PipelineEngine:
 
     def components_between(self, a, b=None):
         '''
-    Return list of components between a and b (inclusive) according to the dependency graph.
-    If b is None, return all components downstream of a.
-    '''
+        Return list of components between a and b (inclusive) according to the dependency graph.
+        If b is None, return all components downstream of a.
+        '''
         nodes = {a}
         visited = set()
 
@@ -443,9 +443,9 @@ class Component:
 
     def pipeline_thread_init(self):
         '''
-    This method is called once per thread before the run loop starts.
-    Subclasses can override this to perform thread-specific initialization.
-    '''
+        This method is called once per thread before the run loop starts.
+        Subclasses can override this to perform thread-specific initialization.
+        '''
         pass
 
     def run_loop(self):
@@ -498,9 +498,9 @@ class Component:
 
 class Function(Component):
     '''
-  Component that wraps a function to be called in the pipeline.
-  The function should accept a single argument, which is the FrameData object.
-  '''
+    Component that wraps a function to be called in the pipeline.
+    The function should accept a single argument, which is the FrameData object.
+    '''
     def __init__(self, func):
         super().__init__()
         self.process = func
