@@ -1,10 +1,14 @@
 import threading
 import time
 import types
+from collections.abc import Iterable
 
 import pipeline as pl
 
-#from clarifai.utils import video_utils
+try:
+    import av
+except ImportError:
+    av = None
 
 START_TIME = time.time()
 
@@ -62,16 +66,67 @@ class Breakpoint(pl.Component):
         pass
 
 
-class FrameReader(pl.Component):
-    def __init__(self, video_frames_generator):
+class VideoReader(pl.Component):
+    def __init__(self, input_file=None, frames=None):
         super().__init__()
-        self.video_frames_generator = video_frames_generator
+        assert av is not None, 'PyAV is required for VideoReader'
+        # check only one of input_file or frames is provided
+        if sum(map(lambda x: x is not None, [input_file, frames])) != 1:
+            raise ValueError(
+                'Either input_file or frames must be provided, but not both.'
+            )
+
+        if input_file is not None:
+            # Use a video frames generator to read frames from the video file
+            container = av.open(input_file)
+            self.frames = (frame.to_image() for frame in container.decode(video=0))
+        else:
+            # Use the provided frames iterable or generator
+            self.frames = frames
+
+        if isinstance(self.frames, Iterable):
+            # If frames is an iterable, convert it to a generator
+            self.frames = iter(self.frames)
+
+        if not isinstance(self.frames, types.GeneratorType):
+            raise ValueError('frames must be a generator or an iterable of frames.')
 
     def process(self, data):
         try:
-            data.frame = next(self.video_frames_generator)
+            data.frame = next(self.frames)
         except StopIteration:
             raise pl.StreamEnd('End of video stream reached')
+
+
+class VideoWriter(pl.Component):
+    def __init__(self, output_file, fps=30, pix_fmt='yuv420p', codec='h264'):
+        super().__init__()
+        assert av is not None, 'PyAV is required for VideoWriter'
+        self.output_file = output_file  # path to mp4 or other video file
+        self.fps = fps
+        self.pix_fmt = pix_fmt
+        self.codec = codec
+        self.container = None
+        self.stream = None
+
+    def process(self, data):
+
+        if self.container is None:
+            self.container = av.open(self.output_file, mode='w')
+            self.stream = self.container.add_stream(self.codec, rate=self.fps)
+            self.stream.width = data.frame.width
+            self.stream.height = data.frame.height
+            self.stream.pix_fmt = self.pix_fmt
+
+        frame = av.VideoFrame.from_image(data.frame)
+        for packet in self.stream.encode(frame):
+            self.container.mux(packet)
+
+    def end(self):
+        if self.stream is not None:
+            for packet in self.stream.encode(None):  # flush the stream
+                self.container.mux(packet)
+            self.container.close()
 
 
 class ExecuteIfReady(pl.Component):
@@ -110,8 +165,8 @@ def test():
         #return f'SINK  t:{data.frame.time}   processed:{data.processed_frame}   latency: {pl.ts() - data.create_time:.3f}  throughput: {meter.get():.3f}'
         return f'SINK  c:{data.count}  latency: {pl.ts() - data.create_time:.3f}  throughput: {meter.get():.3f}  meter2: {meter2.get():.3f}  sleeps: {data.sleeps}'
 
-    #source = (FrameReader(video) | pl.FixedRateLimiter(30))
-    #source = FrameReader(video)
+    #source = (VideoReader(video) | pl.FixedRateLimiter(30))
+    #source = VideoReader(video)
 
     pipeline = (
         #source | Counter()  #| pl.AdaptiveRateLimiter(meter, initial_rate=30, drop=False)

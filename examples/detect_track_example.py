@@ -1,10 +1,7 @@
-import os
-
-import av
 import supervision as sv
 
 import pipeline as pl
-from components import Counter, FrameReader, Print
+from components import Counter, Print, VideoReader, VideoWriter
 from detector import HFDetector
 from multiprocess import Multiprocess
 from tracker import Tracker
@@ -14,26 +11,16 @@ def main():
 
     # create detector and tracker components
 
+    # use 2 detector processes running in parallel
     detector = Multiprocess(
         HFDetector, model_name='PekingU/rtdetr_v2_r18vd', score_threshold=0.5
-    )
-    # use 2 detector processes running in parallel
-    detector.num_instances(2)
+    ).num_instances(2)
 
-    tracker = Multiprocess(Tracker)
     # tracker has to be single instance to see all detections sequentially
-    tracker.num_instances(1)
-
-    # input video file
-    video_file = 'test_data/venice2.mp4'
-
-    def video_frames_loop():
-        container = av.open(video_file)
-        for frame in container.decode(video=0):
-            yield frame.to_image()  # Convert to PIL Image
+    tracker = Multiprocess(Tracker)
 
     # reader component to read frames from the video file
-    reader = FrameReader(video_frames_loop())
+    reader = VideoReader(input_file='test_data/venice2.mp4')
 
     # set up annotators for bounding boxes and labels
     box_annotator = sv.BoxAnnotator()
@@ -46,32 +33,36 @@ def main():
         data.annotated_frame = frame
 
     # output directory for annotated frames
-    output_dir = 'output'
-    os.makedirs(output_dir, exist_ok=True)
+    output_file = 'output.mp4'
+    writer = VideoWriter(output_file=output_file, fps=30)
 
-    def write_frame(data):
-        output_file = f'{output_dir}/frame_{data.pts:05d}.jpg'
-        with open(output_file, 'wb') as f:
-            data.annotated_frame.save(f, format='JPEG')
+    engine = pl.PipelineEngine()
 
-    pipeline = (
+    engine.add(
         reader
-        | pl.FixedRateLimiter(30)
+        #| pl.FixedRateLimiter(30)
         | Counter().fields(count='pts')
-        | pl.AdaptiveRateLimiter(initial_rate=30, print_stats_interval=1.0)
+        #| pl.AdaptiveRateLimiter(initial_rate=30, print_stats_interval=1.0)
         | detector
         | tracker
         | pl.Function(annotate)
-        | pl.Function(write_frame).num_threads(4)
+        | writer.fields(frame='annotated_frame')
         | Print(
             lambda data:
             f'FRAME {data.pts}: {len(data.tracked_objects.tracker_id)} objects tracked / {len(data.detections["boxes"])} detections, latency: {pl.ts() - data.create_time:.3f}, throughput: {engine.global_meter.get():.3f} FPS'
         )
     )
 
-    engine = pl.PipelineEngine(pipeline)
+    # add detector print component to log detection counts
+    # this print runs in parallel with the main pipeline
+    engine.add(
+        detector | Print(
+            lambda data:
+            f'DETECTOR {data.pts}: {len(data.detections["boxes"])} detections'
+        )
+    )
+
     engine.run_until(lambda: reader.is_done)
-    #engine.run()
 
 
 if __name__ == "__main__":
