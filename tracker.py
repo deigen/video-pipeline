@@ -1,6 +1,5 @@
 import numpy as np
 import supervision as sv
-import torch
 from PIL import Image
 
 import pipeline as pl

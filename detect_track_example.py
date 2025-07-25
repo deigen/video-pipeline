@@ -1,11 +1,10 @@
 import os
 
 import av
-import numpy as np
 import supervision as sv
 
 import pipeline as pl
-from components import Breakpoint, Counter, FrameReader, Print, Sleep
+from components import Counter, FrameReader, Print
 from detector import HFDetector
 from multiprocess import Multiprocess
 from tracker import Tracker

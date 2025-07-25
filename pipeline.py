@@ -7,7 +7,6 @@ import random
 import threading
 import time
 import traceback
-import types
 import weakref
 
 try:
