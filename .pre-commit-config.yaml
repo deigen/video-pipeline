@@ -1,9 +1,4 @@
 repos:
-  - repo: https://github.com/google/yapf
-    rev: v0.40.2
-    hooks:
-      - id: yapf
-
   - repo: https://github.com/PyCQA/isort
     rev: 6.0.1
     hooks:
@@ -13,5 +8,9 @@ repos:
     rev: v0.12.5
     hooks:
       - id: ruff-check
-        args: [ --fix ]
       #- id: ruff-format
+
+  - repo: https://github.com/google/yapf
+    rev: v0.40.2
+    hooks:
+      - id: yapf
