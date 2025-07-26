@@ -20,7 +20,7 @@ def main():
     tracker = Multiprocess(Tracker)
 
     # reader component to read frames from the video file
-    reader = VideoReader(input_file='test_data/venice2.mp4')
+    reader = VideoReader(input_file='test_data/venice2.mp4', loop=True)
 
     # set up annotators for bounding boxes and labels
     box_annotator = sv.BoxAnnotator()
@@ -33,16 +33,17 @@ def main():
         data.annotated_frame = frame
 
     # output directory for annotated frames
-    output_file = 'output.mp4'
+    #output_file = 'output.mp4'
+    output_file = 'rtsp://localhost:8554/output'
     writer = VideoWriter(output_file=output_file, fps=30)
 
     engine = pl.PipelineEngine()
 
     engine.add(
         reader
-        #| pl.FixedRateLimiter(30)
+        | pl.FixedRateLimiter(30)
         | Counter().fields(count='pts')
-        #| pl.AdaptiveRateLimiter(initial_rate=30, print_stats_interval=1.0)
+        | pl.AdaptiveRateLimiter(initial_rate=30, print_stats_interval=1.0)
         | detector
         | tracker
         | pl.Function(annotate)

@@ -67,9 +67,12 @@ class Breakpoint(pl.Component):
 
 
 class VideoReader(pl.Component):
-    def __init__(self, input_file=None, frames=None):
+    def __init__(self, input_file=None, frames=None, loop=False):
         super().__init__()
         assert av is not None, 'PyAV is required for VideoReader'
+
+        self.loop = loop
+
         # check only one of input_file or frames is provided
         if sum(map(lambda x: x is not None, [input_file, frames])) != 1:
             raise ValueError(
@@ -78,11 +81,31 @@ class VideoReader(pl.Component):
 
         if input_file is not None:
             # Use a video frames generator to read frames from the video file
-            container = av.open(input_file)
-            self.frames = (frame.to_image() for frame in container.decode(video=0))
+            if self.loop:
+
+                def frame_generator():
+                    while True:
+                        container = av.open(input_file)
+                        for frame in container.decode(video=0):
+                            yield frame
+                        container.close()
+
+                self.frames = frame_generator()
+            else:
+                container = av.open(input_file)
+                self.frames = (frame for frame in container.decode(video=0))
         else:
             # Use the provided frames iterable or generator
-            self.frames = frames
+            if self.loop:
+
+                def frame_generator():
+                    while True:
+                        for frame in frames:
+                            yield frame
+
+                self.frames = frame_generator()
+            else:
+                self.frames = frames
 
         if isinstance(self.frames, Iterable):
             # If frames is an iterable, convert it to a generator
@@ -93,7 +116,13 @@ class VideoReader(pl.Component):
 
     def process(self, data):
         try:
-            data.frame = next(self.frames)
+            frame = next(self.frames)
+            if isinstance(frame, av.VideoFrame):
+                data.frame = frame.to_image()
+            else:
+                data.frame = frame
+            if hasattr(frame, 'pts'):
+                data.pts = frame.pts
         except StopIteration:
             raise pl.StreamEnd('End of video stream reached')
 
@@ -108,17 +137,37 @@ class VideoWriter(pl.Component):
         self.codec = codec
         self.container = None
         self.stream = None
+        self.pts = 0  # pts for the video frames, from data.pts or sequential
+
+    def num_threads(self, num_threads):
+        if num_threads != 1:
+            raise ValueError('VideoWriter can only run with 1 thread.')
+        super().num_threads(num_threads)
+
+    def _container_open(self, size=None):
+        if self.container is not None:
+            return
+        if self.output_file.startswith('rtsp://'):
+            # For RTSP output, use the 'rtsp' mode
+            self.container = av.open(
+                self.output_file, mode='w', format='rtsp', options={
+                    'rtsp_transport': 'tcp', 'muxdelay': '0.1', 'stimeout': '5000000'
+                }
+            )
+        else:
+            self.container = av.open(self.output_file, mode='w')
+        self.stream = self.container.add_stream(self.codec, rate=self.fps)
+        if size is not None:
+            self.stream.width = size[0]
+            self.stream.height = size[1]
+        self.stream.pix_fmt = self.pix_fmt
 
     def process(self, data):
-
-        if self.container is None:
-            self.container = av.open(self.output_file, mode='w')
-            self.stream = self.container.add_stream(self.codec, rate=self.fps)
-            self.stream.width = data.frame.width
-            self.stream.height = data.frame.height
-            self.stream.pix_fmt = self.pix_fmt
+        self._container_open(data.frame.size)
 
         frame = av.VideoFrame.from_image(data.frame)
+        self.pts = data.pts if hasattr(data, 'pts') else self.pts + 1
+        frame.pts = self.pts
         for packet in self.stream.encode(frame):
             self.container.mux(packet)
 
