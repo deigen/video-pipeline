@@ -1,10 +1,13 @@
 import supervision as sv
 
+import meters
 import pipeline as pl
-from components import Counter, Print, VideoReader, VideoWriter
+from components import Counter, Function, Print, VideoReader, VideoWriter
 from detector import HFDetector
 from multiprocess import Multiprocess
 from tracker import Tracker
+
+pl.meters = meters  # until refactor is done
 
 
 def main():
@@ -41,12 +44,12 @@ def main():
 
     engine.add(
         reader
-        | pl.FixedRateLimiter(30)
+        | pl.meters.FixedRateLimiter(30)
         | Counter().fields(count='pts')
-        | pl.AdaptiveRateLimiter(initial_rate=30, print_stats_interval=1.0)
+        | pl.meters.AdaptiveRateLimiter(initial_rate=30, print_stats_interval=1.0)
         | detector
         | tracker
-        | pl.Function(annotate)
+        | Function(annotate)
         | writer.fields(frame='annotated_frame')
         | Print(
             lambda data:

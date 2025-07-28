@@ -178,7 +178,17 @@ class VideoWriter(pl.Component):
             self.container.close()
 
 
-class ExecuteIfReady(pl.Component):
+class Function(pl.Component):
+    '''
+    Component that wraps a function to be called in the pipeline.
+    The function should accept a single argument, which is the FrameData object.
+    '''
+    def __init__(self, func):
+        super().__init__()
+        self.process = func
+
+
+class RunOrSkip(pl.Component):
     def __init__(self, component):
         super().__init__()
         self.component = component
@@ -192,15 +202,14 @@ class ExecuteIfReady(pl.Component):
         return super().num_threads(2 * num_threads)
 
     def process(self, data):
-        acquired = self.semaphore.acquire(blocking=False)
-        if acquired:
+        if self.semaphore.acquire(blocking=False):
             try:
                 self.component.process(data)
-                data.processed_frame = True
+                data.processed = True
             finally:
                 self.semaphore.release()
         else:
-            data.processed_frame = False
+            data.processed = False
 
 
 def test():
