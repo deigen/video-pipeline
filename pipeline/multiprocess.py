@@ -36,6 +36,8 @@ import traceback
 
 import pipeline as pl
 
+__all__ = ['Multiprocess']
+
 
 class Multiprocess(pl.Component):
     def __init__(self, cls, **init_kwargs):
