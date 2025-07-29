@@ -55,7 +55,7 @@ class HFDetector(pl.Component):
 
         results = self.image_processor.post_process_object_detection(
             outputs, target_sizes=torch.tensor([(image.height, image.width)]),
-            threshold=0.5
+            threshold=self.score_threshold
         )
 
         return results[0] if singleton else results
