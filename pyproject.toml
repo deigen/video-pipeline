@@ -17,3 +17,6 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://github.com/deigen/video-pipeline"
+
+[tool.setuptools]
+packages = ["pipeline"]
