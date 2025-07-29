@@ -3,7 +3,7 @@ import random
 import threading
 import time
 
-from pipeline import Component, Drop, ts
+from pipeline.engine import Component, Drop, ts
 
 __all__ = ["ThroughputMeter", "FixedRateLimiter", "AdaptiveRateLimiter"]
 

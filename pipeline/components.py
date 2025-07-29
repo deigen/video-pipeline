@@ -3,7 +3,7 @@ import time
 import types
 from collections.abc import Iterable
 
-import pipeline as pl
+from pipeline.engine import Component, StreamEnd, ts
 
 try:
     import av
@@ -18,18 +18,18 @@ __all__ = [
 ]
 
 
-class Counter(pl.Component):
+class Counter(Component):
     def __init__(self):
         super().__init__()
         self.count = 0
 
     def process(self, data):
         data.count = self.count
-        data.create_time = pl.ts()
+        data.create_time = ts()
         self.count += 1
 
 
-class Sleep(pl.Component):
+class Sleep(Component):
     def __init__(self, seconds):
         super().__init__()
         self.seconds = seconds
@@ -39,7 +39,7 @@ class Sleep(pl.Component):
         data.sleeps = data.sleeps + 1 if hasattr(data, 'sleeps') else 1
 
 
-class Print(pl.Component):
+class Print(Component):
     def __init__(self, message=None, interval=None):
         super().__init__()
         self.message = message
@@ -47,7 +47,7 @@ class Print(pl.Component):
         self.last_print = 0
 
     def process(self, data):
-        if self.interval is not None and pl.ts() - self.last_print < self.interval:
+        if self.interval is not None and ts() - self.last_print < self.interval:
             return
         if isinstance(self.message, types.FunctionType):
             print(self.message(data))
@@ -55,11 +55,11 @@ class Print(pl.Component):
             print(self.message.format(data=data))
         elif self.message is None:
             print(data)
-        self.last_print = pl.ts()
-        #print(f'{data.count}  latency: {pl.ts() - data.create_time:.3f}  throughput: {meter.get():.3f}')
+        self.last_print = ts()
+        #print(f'{data.count}  latency: {ts() - data.create_time:.3f}  throughput: {meter.get():.3f}')
 
 
-class Breakpoint(pl.Component):
+class Breakpoint(Component):
     def __init__(self, condition=None):
         super().__init__()
         self.condition = condition
@@ -71,7 +71,7 @@ class Breakpoint(pl.Component):
         pass
 
 
-class VideoReader(pl.Component):
+class VideoReader(Component):
     def __init__(self, input_file=None, frames=None, loop=False):
         super().__init__()
         assert av is not None, 'PyAV is required for VideoReader'
@@ -129,10 +129,10 @@ class VideoReader(pl.Component):
             if hasattr(frame, 'pts'):
                 data.pts = frame.pts
         except StopIteration:
-            raise pl.StreamEnd('End of video stream reached')
+            raise StreamEnd('End of video stream reached')
 
 
-class VideoWriter(pl.Component):
+class VideoWriter(Component):
     def __init__(self, output_file, fps=30, pix_fmt='yuv420p', codec='h264'):
         super().__init__()
         assert av is not None, 'PyAV is required for VideoWriter'
@@ -183,7 +183,7 @@ class VideoWriter(pl.Component):
             self.container.close()
 
 
-class Function(pl.Component):
+class Function(Component):
     '''
     Component that wraps a function to be called in the pipeline.
     The function should accept a single argument, which is the FrameData object.
@@ -193,7 +193,7 @@ class Function(pl.Component):
         self.process = func
 
 
-class RunOrSkip(pl.Component):
+class RunOrSkip(Component):
     def __init__(self, component):
         super().__init__()
         self.component = component
@@ -215,31 +215,3 @@ class RunOrSkip(pl.Component):
                 self.semaphore.release()
         else:
             data.processed = False
-
-
-def test():
-    #video = _teststream()
-
-    meter = pl.ThroughputMeter()
-    meter2 = pl.ThroughputMeter()
-    print(meter.id, meter2.id)
-
-    def _print_msg(data):
-        #return f'SINK  t:{data.frame.time}   processed:{data.processed_frame}   latency: {pl.ts() - data.create_time:.3f}  throughput: {meter.get():.3f}'
-        return f'SINK  c:{data.count}  latency: {pl.ts() - data.create_time:.3f}  throughput: {meter.get():.3f}  meter2: {meter2.get():.3f}  sleeps: {data.sleeps}'
-
-    #source = (VideoReader(video) | pl.FixedRateLimiter(30))
-    #source = VideoReader(video)
-
-    pipeline = (
-        #source | Counter()  #| pl.AdaptiveRateLimiter(meter, initial_rate=30, drop=False)
-        Sleep(1 / 100.)
-        | Counter()
-        | pl.AdaptiveRateLimiter(meter, initial_rate=100, print_stats_interval=1.0)
-        | meter2
-        | Sleep(0.03)
-        | meter  #| Print(_print_msg)
-    )
-
-    engine = pl.PipelineEngine(pipeline)
-    engine.run()

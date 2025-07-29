@@ -313,7 +313,7 @@ class PipelineEngine:
             del self.work_buffer[:num_remove]
 
     def _add_global_meter(self):
-        from meters import AdaptiveRateLimiter, ThroughputMeter  # avoid circular import
+        from .meters import AdaptiveRateLimiter, ThroughputMeter  # avoid circular import
 
         # add global meter behind every component
         self.global_meter = ThroughputMeter()  # overall throughput meter for the engine
