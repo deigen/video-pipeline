@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pipeline"
+version = "0.1.0"
+description = "A Python package for streaming pipelines"
+authors = [
+    { name="deigen" }
+]
+readme = "README.md"
+requires-python = ">=3.7"
+license = { file = "LICENSE" }
+dependencies = [
+]
+
+[project.urls]
+Homepage = "https://github.com/deigen/video-pipeline"
