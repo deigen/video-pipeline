@@ -40,6 +40,14 @@ __all__ = ['Multiprocess']
 
 
 class Multiprocess(pl.Component):
+    '''
+    Runs a Component class in a separate process.
+    Use num_instances to set the number of instances (processes) to create.
+
+    A separate instance of the class is created for each component run thread.
+    Only data fields that are accessed or set in the child process are sent between this
+    process and the child process.
+    '''
     def __init__(self, cls, **init_kwargs):
         super().__init__()
         self.cls = cls
@@ -61,6 +69,9 @@ class Multiprocess(pl.Component):
             instance.exit()
 
     def num_instances(self, n):
+        '''
+        Set the number of instances (processes) to create.
+        '''
         # processes will be created in pipeline_thread_init, one for each component thread
         self.num_threads(n)  # child processes are 1-1 with component threads
         return self

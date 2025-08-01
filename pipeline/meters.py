@@ -9,6 +9,9 @@ __all__ = ["ThroughputMeter", "FixedRateLimiter", "AdaptiveRateLimiter"]
 
 
 class ThroughputMeter(Component):
+    '''
+    Measures the throughput of the data stream in items per second.
+    '''
     def __init__(self, alpha=0.02, update_interval=0.1, print=False):
         super().__init__()
         self.lock = threading.Lock()
@@ -53,6 +56,12 @@ class ThroughputMeter(Component):
 
 
 class FixedRateLimiter(Component):
+    '''
+    Limits the rate of processing to a fixed number of frames per second.
+
+    If drop is True, drops frames that come in before the next release time.
+    If drop is False, sleeps until the next release time so all frames are processed.
+    '''
     def __init__(self, rate=30, drop=False):
         super().__init__()
         self.rate = rate
@@ -73,6 +82,17 @@ class FixedRateLimiter(Component):
 
 
 class AdaptiveRateLimiter(Component):
+    '''
+    Adaptively limits the rate of the stream to match the achievable throughput.
+    Frames are dropped when downstream processing is slower than the incoming rate.
+
+    The target release rate is adjusted based on the max queue size of downstream components,
+    using a target queue size default of 0.1 to avoid pileup.
+
+    Throughput is measured by the downstream_meter, which by defualt is the global meter
+    of the pipeline engine that includes all components, but can be set to any other meter
+    to include only specific components in rate limit.
+    '''
     def __init__(
         self, downstream_meter=None, initial_rate=30, delta=0.1, target_qsize=0.1,
         drop=True, print_stats_interval=0

@@ -5,6 +5,9 @@ import pipeline as pl
 
 
 class Tracker(pl.Component):
+    '''
+    Component for tracking objects in video frames using ByteTrack.
+    '''
     def __init__(self):
         super().__init__()
         self.tracker = sv.ByteTrack()

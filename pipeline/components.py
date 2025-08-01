@@ -21,6 +21,12 @@ __all__ = [
 
 
 class Counter(Component):
+    '''
+    Adds a count and create_time to the data object.
+
+    data.count is set to a sequential count starting from 0.
+    data.create_time is set to the current timestamp.
+    '''
     def __init__(self):
         super().__init__()
         self.count = 0
@@ -32,6 +38,9 @@ class Counter(Component):
 
 
 class Sleep(Component):
+    '''
+    Sleeps for a given number of seconds.
+    '''
     def __init__(self, seconds):
         super().__init__()
         self.seconds = seconds
@@ -42,6 +51,15 @@ class Sleep(Component):
 
 
 class Print(Component):
+    '''
+    Prints the data object or a formatted message to the console.
+
+    If message is a function, it will be called with the data object.
+    If message is a string, it will be formatted with the data object.
+    If message is None, the data object will be printed directly.
+
+    If interval is set, it will only print if the specified time has passed since the last print.
+    '''
     def __init__(self, message=None, interval=None):
         super().__init__()
         self.message = message
@@ -61,6 +79,10 @@ class Print(Component):
 
 
 class LimitNumFrames(Component):
+    '''
+    Limits the number of frames processed by the pipeline.
+    Raises StreamEnd when the limit is reached.
+    '''
     def __init__(self, num_frames):
         super().__init__()
         self.num_frames = num_frames
@@ -73,6 +95,11 @@ class LimitNumFrames(Component):
 
 
 class Breakpoint(Component):
+    '''
+    Triggers a breakpoint in the code when processing data.
+    If a condition is provided, it will only trigger the breakpoint if the condition is met.
+    Useful for debugging to inspect the data object at a specific point in the pipeline.
+    '''
     def __init__(self, condition=None):
         super().__init__()
         self.condition = condition
@@ -88,6 +115,17 @@ class Breakpoint(Component):
 
 
 class VideoReader(Component):
+    '''
+    Reads video frames from a file or an iterable of frames.
+
+    If input_file is provided, it will read frames from the video file.
+    If frames is provided, it will read frames from the iterable or generator.
+
+    If loop is True, it will loop over the frames indefinitely.
+
+    If add_pts is True, it will add a pts (presentation timestamp) to the data object.
+    The pts is either taken from the video frame's pts or incremented sequentially.
+    '''
     def __init__(self, input_file=None, frames=None, loop=False, add_pts=True):
         super().__init__()
         assert av is not None, 'PyAV is required for VideoReader'
@@ -163,6 +201,12 @@ class VideoReader(Component):
 
 
 class VideoWriter(Component):
+    '''
+    Writes video frames to a file or an RTSP stream.
+    
+    If output_file is a path to a video file, it will write frames to that file.
+    If output_file is an RTSP URL, it will write frames to the RTSP stream.
+    '''
     def __init__(self, output_file, fps=30, pix_fmt='yuv420p', codec='h264'):
         super().__init__()
         assert av is not None, 'PyAV is required for VideoWriter'
@@ -227,6 +271,11 @@ class Function(Component):
 
 
 class AsReady(Component):
+    '''
+    Runs the underlying component if it is not already executing.
+    Otherwise, skips processing the data and marks it as not processed using data.processed = False.
+    Note: use .fields(processed='newname') to rename the processed field if needed.
+    '''
     def __init__(self, component):
         super().__init__()
         self.component = component
