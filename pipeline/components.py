@@ -14,7 +14,7 @@ START_TIME = time.time()
 
 __all__ = [
     'Counter', 'Sleep', 'Print', 'Breakpoint', 'VideoReader', 'VideoWriter', 'Function',
-    'RunOrSkip'
+    'RunOrSkip', 'LimitNumFrames'
 ]
 
 
@@ -59,6 +59,18 @@ class Print(Component):
         #print(f'{data.count}  latency: {ts() - data.create_time:.3f}  throughput: {meter.get():.3f}')
 
 
+class LimitNumFrames(Component):
+    def __init__(self, num_frames):
+        super().__init__()
+        self.num_frames = num_frames
+        self.count = 0
+
+    def process(self, data):
+        if self.count >= self.num_frames:
+            raise StreamEnd('Limit reached')
+        self.count += 1
+
+
 class Breakpoint(Component):
     def __init__(self, condition=None):
         super().__init__()
@@ -72,11 +84,12 @@ class Breakpoint(Component):
 
 
 class VideoReader(Component):
-    def __init__(self, input_file=None, frames=None, loop=False):
+    def __init__(self, input_file=None, frames=None, loop=False, add_pts=True):
         super().__init__()
         assert av is not None, 'PyAV is required for VideoReader'
 
         self.loop = loop
+        self.add_pts = add_pts
 
         # check only one of input_file or frames is provided
         if sum(map(lambda x: x is not None, [input_file, frames])) != 1:
@@ -89,9 +102,13 @@ class VideoReader(Component):
             if self.loop:
 
                 def frame_generator():
+                    last_d = 0
                     while True:
+                        self._start_pts = self._curr_pts + last_d
                         container = av.open(input_file)
                         for frame in container.decode(video=0):
+                            if hasattr(frame, 'pts'):
+                                last_d = frame.pts - self._curr_pts
                             yield frame
                         container.close()
 
@@ -119,15 +136,24 @@ class VideoReader(Component):
         if not isinstance(self.frames, types.GeneratorType):
             raise ValueError('frames must be a generator or an iterable of frames.')
 
+        self._start_pts = 0
+        self._curr_pts = 0  # current pts for the video frames, from video pts or sequential
+
     def process(self, data):
         try:
             frame = next(self.frames)
+
             if isinstance(frame, av.VideoFrame):
                 data.frame = frame.to_image()
             else:
                 data.frame = frame
-            if hasattr(frame, 'pts'):
-                data.pts = frame.pts
+
+            if self.add_pts:
+                if hasattr(frame, 'pts'):
+                    self._curr_pts = self._start_pts + frame.pts
+                else:
+                    self._curr_pts += 1
+                data.pts = self._curr_pts
         except StopIteration:
             raise StreamEnd('End of video stream reached')
 

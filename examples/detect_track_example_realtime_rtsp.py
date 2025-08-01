@@ -18,7 +18,8 @@ def main():
     tracker = pl.Multiprocess(Tracker)
 
     # reader component to read frames from the video file
-    reader = pl.VideoReader(input_file='test_data/venice2.mp4')
+    # set to loop
+    reader = pl.VideoReader(input_file='test_data/venice2.mp4', loop=True)
 
     # set up annotators for bounding boxes and labels
     box_annotator = sv.BoxAnnotator()
@@ -33,21 +34,26 @@ def main():
 
     annotate.num_threads(4)
 
-    # output file with annotated frames
-    writer = pl.VideoWriter(output_file='output.mp4', fps=30)
+    # output annotated frames to RTSP stream
+    # make sure you have an RTSP server running, e.g. using simple-rtsp-server/mediamtx
+    rtsp_url = 'rtsp://localhost:8554/example'
+    writer = pl.VideoWriter(output_file=rtsp_url, fps=30)
 
     engine = pl.PipelineEngine()
 
+    # use a FixedRateLimiter to simulate a realtime incoming stream at 30 FPS
+    source = reader | pl.FixedRateLimiter(30)
+
+    # add components to the pipeline
+    # use an AdaptiveRateLimiter to control the processing rate: drops frames close to uniformly
+    # when processing is slower than the incoming rate
     engine.add(
-        reader
+        source
+        | pl.AdaptiveRateLimiter(initial_rate=30, print_stats_interval=1.0)
         | detector
         | tracker
         | annotate
         | writer.fields(frame='annotated_frame')
-        | pl.Print(
-            lambda data:
-            f'FRAME {data.pts}: {len(data.tracked_objects.tracker_id)} objects tracked / {len(data.detections["boxes"])} detections  {engine.global_meter.get():.3f} FPS'
-        )
     )
 
     engine.run_until(lambda: reader.is_done)
