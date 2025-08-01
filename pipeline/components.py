@@ -14,8 +14,10 @@ START_TIME = time.time()
 
 __all__ = [
     'Counter', 'Sleep', 'Print', 'Breakpoint', 'VideoReader', 'VideoWriter', 'Function',
-    'RunOrSkip', 'LimitNumFrames'
+    'LimitNumFrames', 'AsReady'
 ]
+
+########### Utility and Debug Components ###########
 
 
 class Counter(Component):
@@ -56,7 +58,6 @@ class Print(Component):
         elif self.message is None:
             print(data)
         self.last_print = ts()
-        #print(f'{data.count}  latency: {ts() - data.create_time:.3f}  throughput: {meter.get():.3f}')
 
 
 class LimitNumFrames(Component):
@@ -81,6 +82,9 @@ class Breakpoint(Component):
             return
         breakpoint()
         pass
+
+
+############# Video Reader/Writer Components ###########
 
 
 class VideoReader(Component):
@@ -209,6 +213,9 @@ class VideoWriter(Component):
             self.container.close()
 
 
+############ General Purpose Components ###########
+
+
 class Function(Component):
     '''
     Component that wraps a function to be called in the pipeline.
@@ -219,7 +226,7 @@ class Function(Component):
         self.process = func
 
 
-class RunOrSkip(Component):
+class AsReady(Component):
     def __init__(self, component):
         super().__init__()
         self.component = component
