@@ -46,7 +46,7 @@ def main():
         | writer.fields(frame='annotated_frame')
         | pl.Print(
             lambda data:
-            f'FRAME {data.pts}: {len(data.tracked_objects.tracker_id)} objects tracked / {len(data.detections["boxes"])} detections  {engine.global_meter.get():.3f} FPS'
+            f'FRAME {data.pts}: {len(data.tracked_objects.tracker_id)} objects tracked / {len(data.detections["boxes"])} detections  {engine.get_fps():.3f} FPS'
         )
     )
 

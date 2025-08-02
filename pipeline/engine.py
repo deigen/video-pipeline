@@ -303,6 +303,14 @@ class PipelineEngine:
         '''
         self._end_event.wait()  # wait until the engine is done
 
+    def get_fps(self):
+        '''
+        Get the current throughput in frames per second.
+        '''
+        if not hasattr(self, 'global_meter'):
+            return None
+        return self.global_meter.get()
+
     def _check_done(self):
         if self.is_done:
             return True
