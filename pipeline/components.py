@@ -333,7 +333,7 @@ class IterSource(Component):
                     f'Unsupported item type: {type(item)}, expected dict or FrameData.'
                 )
         except StopIteration:
-            raise StreamEnd('End of iterable source')
+            raise StreamEnd
 
 
 class IterSink(Component):
@@ -351,12 +351,12 @@ class IterSink(Component):
     def __iter__(self):
         while True:
             data = self.queue.get()
-            if isinstance(data, StreamEnd):
+            if data is StopIteration:
                 break
             yield data
 
     def end(self):
-        self.queue.put(StreamEnd('End of sink'))
+        self.queue.put(StopIteration)  # signal the end of the sink
 
 
 class AsReady(Component):

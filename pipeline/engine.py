@@ -145,19 +145,21 @@ class Item:
 
     _ID_COUNTER = itertools.count()
 
-    def __init__(self):
+    def __init__(self, changed_event):
         self.id = next(Item._ID_COUNTER)
         self.states = {}
         self.error = None
         self.data = FrameData()
+        self.changed_event = changed_event
 
     def __repr__(self):
-        return f'Item({self.id})'
+        return f'Item({self.id} : {", ".join(f"{k}={v[0].name}" for k, v in self.states.items())})'
 
     def set_state(self, component_id, state):
         now = ts()
         logging.debug("%f %s %s, -> %s", now, component_id, self, state)
         self.states[component_id] = (state, now)
+        self.changed_event.set()  # signal that a state has changed
 
     def get_state(self, component_id):
         if component_id not in self.states:
@@ -265,14 +267,14 @@ class PipelineEngine:
             self.changed_event.set()
             # main loop runs until is_done() is True and there are no items left to process
             while not self.is_done or self.work_buffer:
-                self.changed_event.wait()
-                self._check_done()
+                self.changed_event.wait(timeout=1.0)
+                self.changed_event.clear()
                 if self._current_loop_start == ts():
                     # loop rounds faster than the time resolution, wait so time is always monotonic
                     time.sleep(1e-6)
                     continue
-                self.changed_event.clear()
                 self._current_loop_start = ts()
+                self._check_done()
                 self._start_items()
                 self._schedule_components()
                 self._cleanup()
@@ -291,17 +293,12 @@ class PipelineEngine:
             self.running = False
             self._end_event.set()
 
-    def callback(self, item, component_id):
-        # called upon item completion, failure, or drop by a component to signal a state change
-        self.changed_event.set()
-
     def stop(self):
         '''
         Stop the pipeline engine, which will stop processing new items and finish processing
         all items that are already in progress.
         '''
         self.is_done = True
-        self.changed_event.set()
 
     def wait(self):
         '''
@@ -327,8 +324,7 @@ class PipelineEngine:
                 or any(s[0].value for s in self.work_buffer[-new].states.values())
             )
         ):
-            self.work_buffer.append(Item())
-            self.changed_event.set()
+            self.work_buffer.append(Item(self.changed_event))
 
     def _schedule_components(self):
         for component in self.components:
@@ -502,7 +498,6 @@ class Component:
             pass
         else:
             item.set_state(self.id, State.QUEUED)
-            #self.engine.callback(item, self.id)  # should need cb only for done transitions
 
     def start(self):
         for i in range(self._num_threads):
@@ -541,7 +536,6 @@ class Component:
                     item.set_state(self.id, State.COMPLETED)
                 finally:
                     self._item_queue.task_done()
-                    self.engine.callback(item, self.id)
             except Exception:
                 logging.exception('Internal error in component %s', self.id)
                 time.sleep(1)
