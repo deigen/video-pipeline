@@ -17,7 +17,9 @@ A simple pipeline engine in python with minimal dependencies.
 ## Installation
 
 ```bash
-pip install git+https://github.com/deigen/video-pipeline.git
+git clone git@github.com:deigen/video-pipeline.git
+cd video-pipeline
+pip install .
 ```
 
 ## Usage
