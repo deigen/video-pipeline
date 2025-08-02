@@ -70,7 +70,7 @@ def main():
         | writer.fields(frame='annotated_frame')
     )
 
-    engine.run_until(lambda: reader.is_done)
+    engine.run()
 
 
 if __name__ == "__main__":

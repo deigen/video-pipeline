@@ -1,4 +1,4 @@
-import supervision as sv
+import supervision as sv  # for annotators
 
 import pipeline as pl
 from pipeline.detector import HFDetector
@@ -50,7 +50,7 @@ def main():
         )
     )
 
-    engine.run_until(lambda: reader.is_done)
+    engine.run()
 
 
 if __name__ == "__main__":
