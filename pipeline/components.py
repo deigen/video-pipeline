@@ -1,9 +1,10 @@
+import queue
 import threading
 import time
 import types
 from collections.abc import Iterable
 
-from pipeline.engine import Component, StreamEnd, ts
+from pipeline.engine import Component, FrameData, StreamEnd, ts
 
 try:
     import av
@@ -14,7 +15,7 @@ START_TIME = time.time()
 
 __all__ = [
     'Counter', 'Sleep', 'Print', 'Breakpoint', 'VideoReader', 'VideoWriter', 'Function',
-    'LimitNumFrames', 'AsReady'
+    'LimitNumFrames', 'AsReady', 'FeedSource', 'IterSource', 'IterSink'
 ]
 
 ########### Utility and Debug Components ###########
@@ -268,6 +269,94 @@ class Function(Component):
     def __init__(self, func):
         super().__init__()
         self.process = func
+
+
+class FeedSource(Component):
+    '''
+    Component that feeds data into the pipeline when 
+    '''
+    def __init__(self):
+        super().__init__()
+        self.stopped = False
+        self.queue = queue.Queue()
+
+    def feed_data(self, data):
+        '''
+        Feed data into the component's queue.
+        '''
+        if self.stopped:
+            raise RuntimeError('FeedSource has been stopped and cannot accept new data.')
+        if isinstance(data, dict):
+            self.queue.put(data)
+        elif isinstance(data, FrameData):
+            self.queue.put(data._data)
+        else:
+            raise TypeError(
+                f'Unsupported data type: {type(data)}. Expected dict or FrameData.'
+            )
+
+    def stop(self):
+        '''
+        Stop the feed source by raising StopIteration in the queue.
+        This will signal the end of the feed source.
+        '''
+        self.stopped = True
+        self.queue.put(StreamEnd)
+
+    def process(self, data):
+        d = self.queue.get()
+        if d is StreamEnd:
+            raise StreamEnd('End of feed source')
+        data._data.update(d)  # update the FrameData with the new data
+
+
+class IterSource(Component):
+    '''
+    Component that iterates over a list or generator of data.
+    It will yield each item in the iterable as a FrameData object.
+    '''
+    def __init__(self, iterable):
+        super().__init__()
+        if not isinstance(iterable, (Iterable, types.GeneratorType)):
+            raise TypeError(f'Expected iterable or generator, got {type(iterable)}')
+        self.iterable = iter(iterable)
+
+    def process(self, data):
+        try:
+            item = next(self.iterable)
+            if isinstance(item, dict):
+                data._data.update(item)
+            elif isinstance(item, FrameData):
+                data._data.update(item._data)
+            else:
+                raise TypeError(
+                    f'Unsupported item type: {type(item)}, expected dict or FrameData.'
+                )
+        except StopIteration:
+            raise StreamEnd('End of iterable source')
+
+
+class IterSink(Component):
+    '''
+    Component that acts as a sink for the pipeline, collecting data from the pipeline
+    and buffering it into a generator.
+    '''
+    def __init__(self, buffer_size=100):
+        super().__init__()
+        self.queue = queue.Queue(maxsize=buffer_size)
+
+    def process(self, data):
+        self.queue.put(data)
+
+    def __iter__(self):
+        while True:
+            data = self.queue.get()
+            if isinstance(data, StreamEnd):
+                break
+            yield data
+
+    def end(self):
+        self.queue.put(StreamEnd('End of sink'))
 
 
 class AsReady(Component):

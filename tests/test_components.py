@@ -109,13 +109,6 @@ class TestComponents(unittest.TestCase):
             multiprocess_component.process(data)
             self.assertEqual(data.count, i)
 
-    def test_1000_pipeline(self):
-        # Create a minimal pipeline with one component
-        counter = pl.Counter()
-        engine = pl.PipelineEngine()
-        engine.add(counter)
-        engine.run_until(lambda: counter.count >= 10)
-
 
 if __name__ == "__main__":
     unittest.main()

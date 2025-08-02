@@ -59,7 +59,15 @@ def ts():
     return time.monotonic() - _START_TIME
 
 
+NO_DEFAULT = object()  # sentinel for no default value in get
+
+
 class FrameData:
+    '''
+    FrameData is a container for data associated with a single item (frame) in the pipeline.
+    All fields are stored as key-value pairs, and can be accessed like a dictionary or an object.
+    '''
+
     _initialized = False
 
     def __init__(self):
@@ -70,17 +78,21 @@ class FrameData:
         assert self._initialized
         self._data[key] = value
 
-    def get(self, key):
+    def get(self, key, default=NO_DEFAULT):
         assert self._initialized
         #print('count:', self._data.get('count'), 'get field:', key, 'data:', self._data.keys())
         if key not in self._data:
-            raise KeyError(f"Key '{key}' not in FrameData.")
+            if default is NO_DEFAULT:
+                raise KeyError(f"Key '{key}' not in FrameData.")
+            return default
         return self._data[key]
 
-    def pop(self, key):
+    def pop(self, key, default=NO_DEFAULT):
         assert self._initialized
         if key not in self._data:
-            raise KeyError(f"Key '{key}' not in FrameData.")
+            if default is NO_DEFAULT:
+                raise KeyError(f"Key '{key}' not in FrameData.")
+            return default
         return self._data.pop(key)
 
     def has(self, key):
@@ -99,7 +111,10 @@ class FrameData:
     def __getattr__(self, item):
         #print('getattr', item, 'initialized:', self._initialized)
         if self._initialized:
-            return self.get(item)
+            try:
+                return self.get(item)
+            except KeyError:
+                raise AttributeError(item)
         return super().__getattribute__(item)
 
     def __setattr__(self, key, value):
@@ -121,6 +136,12 @@ class FrameData:
 
 
 class Item:
+    '''
+    Item represents a single unit of work in the pipeline, usually a frame.
+
+    It contains its processing states for each component, used by the engine to track
+    progress and determine which components can be scheduled for processing the item.
+    '''
 
     _ID_COUNTER = itertools.count()
 
@@ -145,6 +166,9 @@ class Item:
 
 
 class PipelineEngine:
+    '''
+    Main Engine class that runs the pipeline and schedules components to process items.
+    '''
     def __init__(self, components=None, max_buffer_size=None):
         self.work_buffer = []  # buffer for work items
         self.components = []  # list of all components
@@ -153,6 +177,7 @@ class PipelineEngine:
         self.running = None
         self.done_callback = None  # callback to check if the pipeline is done
         self.is_done = False  # set to True once the callback returns True
+        self._end_event = threading.Event()
         if components is not None:
             self.add(components)
 
@@ -182,7 +207,7 @@ class PipelineEngine:
             for c in component.dependencies:
                 self.add_component(c)
 
-    def run_until(self, done_callback):
+    def run_until(self, done_callback, block=True):
         '''
         Run the pipeline until the done_callback returns True.
 
@@ -190,21 +215,46 @@ class PipelineEngine:
         but will finish processing all items that are already in the pipeline buffer.
         '''
         self.done_callback = done_callback
-        self.run()
+        self.run(block=block)
 
-    def run(self):
+    def run_forever(self, block=True):
+        '''
+        Run the pipeline indefinitely until stopped manually, even if a component reaches StreamEnd.
+        '''
+        self.done_callback = lambda: False
+        self.run(block=block)
+
+    def run(self, block=True):
         '''
         Main loop of the pipeline engine.
 
+        By defualt, runs until any component signals StreamEnd and all
+        remaining items in the work buffer are processed.  Use run_until() to
+        change the stopping condition.
+
         Starts all components, and enters the main loop that processes items.
         The loop runs in the calling thread, and will not return until the pipeline finishes.
+
+        If block is False, the loop will run in a separate thread and this
+        method will return immediately.
         '''
+        if not block:
+            # run in a separate thread
+            self._engine_thread = threading.Thread(target=self.run, daemon=True)
+            self._engine_thread.start()
+            return
+
+        if self.done_callback is None:
+            self.done_callback = lambda: any(c.is_done for c in self.components)
+
+        self._engine_thread = threading.current_thread()
+
         self._current_loop_start = 0
         self._add_global_meter()
         self._verify_components()
 
         if self.max_buffer_size is None:
-            self.max_buffer_size = sum(c.queue.maxsize for c in self.components)
+            self.max_buffer_size = sum(c._item_queue.maxsize for c in self.components)
 
         self.running = True
         self.is_done = False
@@ -227,20 +277,37 @@ class PipelineEngine:
                 self._schedule_components()
                 self._cleanup()
                 self._start_items()
+
+            # after done, call all end() methods of components to clean up resources
+            for component in self.components:
+                if hasattr(component, 'end'):
+                    try:
+                        component.end()
+                    except Exception as e:
+                        logging.error(
+                            f"Error in component {component.id} end method: {e}"
+                        )
         finally:
             self.running = False
-
-        # after done, call all end() methods of components to clean up resources
-        for component in self.components:
-            if hasattr(component, 'end'):
-                try:
-                    component.end()
-                except Exception as e:
-                    logging.error(f"Error in component {component.id} end method: {e}")
+            self._end_event.set()
 
     def callback(self, item, component_id):
         # called upon item completion, failure, or drop by a component to signal a state change
         self.changed_event.set()
+
+    def stop(self):
+        '''
+        Stop the pipeline engine, which will stop processing new items and finish processing
+        all items that are already in progress.
+        '''
+        self.is_done = True
+        self.changed_event.set()
+
+    def wait(self):
+        '''
+        Wait for the engine thread to finish processing all items and exit.
+        '''
+        self._end_event.wait()  # wait until the engine is done
 
     def _check_done(self):
         if self.is_done:
@@ -279,7 +346,7 @@ class PipelineEngine:
                     item.set_state(
                         component_id, State.PENDING
                     )  # may or may not be queued here now, always mark as pending first
-                    component.enqueue(item)
+                    component._enqueue_item(item)
                 elif any(
                     item.get_state(dep.id) == State.DROPPED
                     for dep in component.dependencies
@@ -397,7 +464,7 @@ class Component:
         self.id = self.__class__.__name__ + '-' + next(Component._ID_COUNTER)
         Component._ALL_COMPONENTS[self.id] = weakref.ref(self)
         self.engine = None
-        self.queue_size = queue_size
+        self._item_queue_size = queue_size
         self.num_threads(1)  # sets up num_threads and self.queue to initial values
         self._fields_map = None
         self.dependencies = set()
@@ -409,8 +476,8 @@ class Component:
         assert num_threads > 0
         assert not self.engine, "Cannot change number of threads after component has been added to an engine."
         self._num_threads = num_threads
-        queue_size = self.queue_size or 2 * num_threads
-        self.queue = queue.Queue(maxsize=queue_size)
+        queue_size = self._item_queue_size or 2 * num_threads
+        self._item_queue = queue.Queue(maxsize=queue_size)
         return self
 
     def fields(self, **fields_map):
@@ -427,10 +494,10 @@ class Component:
         other.depends_on(self)
         return ComponentRange(self, other)
 
-    def enqueue(self, item):
+    def _enqueue_item(self, item):
         try:
-            self.average_qsize = self.average_qsize * 0.9 + self.queue.qsize() * 0.1
-            self.queue.put(item, block=False)
+            self.average_qsize = self.average_qsize * 0.9 + self._item_queue.qsize() * 0.1
+            self._item_queue.put(item, block=False)
         except queue.Full:
             pass
         else:
@@ -456,7 +523,7 @@ class Component:
         self.pipeline_thread_init()
         while True:
             try:
-                item = self.queue.get()  # blocking get for the next item
+                item = self._item_queue.get()  # blocking get for the next item
                 item.set_state(self.id, State.STARTED)
                 try:
                     if self.is_done:
@@ -473,7 +540,7 @@ class Component:
                 else:
                     item.set_state(self.id, State.COMPLETED)
                 finally:
-                    self.queue.task_done()
+                    self._item_queue.task_done()
                     self.engine.callback(item, self.id)
             except Exception:
                 logging.exception('Internal error in component %s', self.id)
