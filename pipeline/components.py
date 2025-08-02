@@ -338,8 +338,8 @@ class IterSource(Component):
 
 class IterSink(Component):
     '''
-    Component that acts as a sink for the pipeline, collecting data from the pipeline
-    and buffering it into a generator.
+    Collects data from the pipeline and buffers it into a python generator
+    that can be iterated over.
     '''
     def __init__(self, buffer_size=100):
         super().__init__()

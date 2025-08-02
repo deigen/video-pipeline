@@ -1,7 +1,6 @@
 import enum
 import itertools
 import logging
-import os
 import queue
 import threading
 import time
@@ -13,8 +12,6 @@ try:
     have_torch = True
 except ImportError:
     have_torch = False
-
-logging.basicConfig(level=os.environ.get('LOGLEVEL', 'INFO').upper())
 
 __all__ = [
     'PipelineEngine', 'Component', 'ComponentRange', 'FrameData', 'State', 'Drop',
