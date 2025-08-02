@@ -74,6 +74,15 @@ Even though components run in separate threads/processes, data (frames) are alwa
 through each component *in order*.  This means that operations like tracking can be done
 on the in-order serialized stream, even when other components are run in parallel.
 
+In contrast to some other pipeline engines, sources and sinks are not handled
+as special components.  Instead, they are just regular components that can
+add or read data fields.  An infinite stream of empty data objects is created
+by the engine for the first components to populate (e.g. `VideoReader`), which is then
+passed through the rest of the pipeline.
+
+![Pipeline Illustration](readme-pipeline.png)
+
+
 ## Components
 
 Components are the building blocks of the pipeline.  Each runs in its own thread (or threads)
@@ -110,4 +119,23 @@ class Annotate(pl.Component):
 # video writer whose data.frame in its process funciton is now the annotated_frame
 writer = pl.VideoWriter("output.mp4").fields(frame='annotated_frame')
 ```
+
+## Dropping Frames and Rate Limiting
+
+If a component decides a frame should be dropped from further processing, it
+can signal this to the engine by raising a Drop exception.  The engine will
+then mark the frame as dropped and skip processing by downstream components.
+
+Rate limiting can be done by using the `FixedRateLimiter` or
+`AdaptiveRateLimiter` components, which limit their output rate either to a fixed
+number of frames per second, or adaptively to match the throughput of the pipeline.
+Frames are dropped if the output rate is too high (though this can be configured
+to sleep instead of dropping frames).  See the [examples](examples) directory for
+examples of rate limiting.
+
+## Stopping the Pipeline
+
+The pipeline can be ended by calling the `stop()` method on the `PipelineEngine` instance,
+or by any component themselves by raising the `StreamEnd` exception.  This will tell the
+engine to stop creating new data objects, finish processing any in-process data, and exit.
 
