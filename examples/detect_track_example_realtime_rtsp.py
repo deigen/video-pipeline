@@ -1,4 +1,18 @@
-import supervision as sv
+'''
+Example of a real-time object detection and tracking pipeline using RTSP stream output.
+
+This example uses a Hugging Face model for object detection and a ByteTrack tracker.
+
+To view the output, you need to have an RTSP server running, such as mediamtx
+(formerly simple-rtsp-server).  You can download it from
+https://github.com/bluenviron/mediamtx/releases/
+and run it with the command `./mediamtx`.
+
+Then run this script and view the output stream using a media player like vlc,
+connecting to the RTSP URL `rtsp://localhost:8554/example`.
+'''
+
+import supervision as sv  # for annotators
 
 import pipeline as pl
 from pipeline.detector import HFDetector
