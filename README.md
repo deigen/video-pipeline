@@ -28,31 +28,36 @@ Example detect + track pipeline with multiprocessing and two detector instances:
 
 ```python
 import pipeline as pl
-from pipline.detector import HFetector
-from pipline.tracker import Tracker
+from pipeline.detector import HFDetector
+from pipeline.tracker import Tracker
 
-reader = pl.VideoReader("video.mp4")
 
-detector = pl.Multiprocess(HFDetector, model_name='PekingU/rtdetr_v2_r18vd')
-detector.num_instances(2)  # Run two instances of the detector in parallel
+def main():
+    reader = pl.VideoReader("video.mp4")
 
-tracker = pl.Multiprocess(Tracker)
+    detector = pl.Multiprocess(HFDetector, model_name='PekingU/rtdetr_v2_r18vd')
+    detector.num_instances(2)  # Run two instances of the detector in parallel
 
-printer = pl.Print(
-    lambda data:
-    f'pts={data.pts}  tracked={len(data.tracked_objects.tracker_id)}  detected={len(data.detections["boxes"])}  fps={engine.get_fps():.3f}'
-)
+    tracker = pl.Multiprocess(Tracker)
 
-engine = pl.PipelineEngine()
+    printer = pl.Print(
+        lambda data:
+        f'pts={data.pts}  tracked={len(data.tracked_objects.tracker_id)}  detected={len(data.detections["boxes"])}  fps={engine.get_fps():.3f}'
+    )
 
-engine.add(
-    reader
-    | detector
-    | tracker
-    | printer
-)
+    engine = pl.PipelineEngine()
 
-engine.run()
+    engine.add(
+        reader
+        | detector
+        | tracker
+        | printer
+    )
+
+    engine.run()
+
+if __name__ == "__main__":
+    main()
 ```
 
 See the [examples](examples) directory for additional examples, including real-time
