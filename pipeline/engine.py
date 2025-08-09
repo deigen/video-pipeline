@@ -14,7 +14,7 @@ except ImportError:
     have_torch = False
 
 __all__ = [
-    'PipelineEngine', 'Component', 'ComponentRange', 'FrameData', 'State', 'Drop',
+    'PipelineEngine', 'Component', 'ComponentChain', 'FrameData', 'State', 'Drop',
     'StreamEnd', 'ts'
 ]
 
@@ -180,31 +180,29 @@ class PipelineEngine:
         if components is not None:
             self.add(components)
 
-    def add(self, component_or_range):
+    def add(self, components):
         '''
-        Add a component or a ComponentRange to the pipeline engine.
-        If a ComponentRange is provided, all components in the range will be added.
+        Add a Component or a ComponentChain to the pipeline engine.
+        If a ComponentChain is provided, all components in the dependency chain will be added.
         '''
-        if isinstance(component_or_range, ComponentRange):
-            self.add_component(component_or_range.end, recursive=True)
-            assert component_or_range.start in self.components, "ComponentRange start should have been added by recursive add."
-        elif isinstance(component_or_range, Component):
-            self.add_component(component_or_range, recursive=True)
+        if isinstance(components, ComponentChain):
+            components.link_dependencies()
+            for component in components.components:
+                self._add_component(component)
+        elif isinstance(components, Component):
+            self._add_component(components)
         else:
             raise TypeError(
-                f"Expected Component or ComponentRange, got {type(component_or_range)}"
+                f"Expected Component or ComponentRange, got {type(components)}"
             )
 
-    def add_component(self, component, recursive=True):
+    def _add_component(self, component):
         if component in self.components:
             assert component.engine is self
             return
         assert component.engine is None, "Component is already part of another pipeline engine."
         component.engine = self
         self.components.append(component)
-        if recursive:
-            for c in component.dependencies:
-                self.add_component(c)
 
     def run_until(self, done_callback, block=True):
         '''
@@ -253,7 +251,7 @@ class PipelineEngine:
         self._verify_components()
 
         if self.max_buffer_size is None:
-            self.max_buffer_size = sum(c._item_queue.maxsize for c in self.components)
+            self.max_buffer_size = 2 * sum(c._num_threads for c in self.components)
 
         self.running = True
         self.is_done = False
@@ -347,7 +345,12 @@ class PipelineEngine:
                     item.set_state(
                         component_id, State.PENDING
                     )  # may or may not be queued here now, always mark as pending first
-                    component._enqueue_item(item)
+                    queued = component._enqueue_item(item)
+                    if not queued:
+                        # if the queue was full, do not try queuing subsequent items;
+                        # instead, go back to top of item loop after there is space
+                        # to maintain order
+                        break
                 elif any(
                     item.get_state(dep.id) == State.DROPPED
                     for dep in component.dependencies
@@ -387,7 +390,7 @@ class PipelineEngine:
         self.global_meter = ThroughputMeter()  # overall throughput meter for the engine
         for component in self.components:
             self.global_meter.depends_on(component)
-        self.add_component(self.global_meter, recursive=False)
+        self._add_component(self.global_meter)
         # AdaptiveRateLimiter requires a downstream meter, set to global meter by default
         for component in self.components:
             if (
@@ -461,24 +464,22 @@ class Component:
     _ID_COUNTER = map(str, itertools.count())
     _ALL_COMPONENTS = {}
 
-    def __init__(self, queue_size=None):
+    def __init__(self):
         self.id = self.__class__.__name__ + '-' + next(Component._ID_COUNTER)
         Component._ALL_COMPONENTS[self.id] = weakref.ref(self)
         self.engine = None
-        self._item_queue_size = queue_size
         self.num_threads(1)  # sets up num_threads and self.queue to initial values
         self._fields_map = None
         self.dependencies = set()
         self.average_qsize = 0
         self.threads = []
         self.is_done = False
+        self._item_queue = queue.Queue()
 
     def num_threads(self, num_threads):
         assert num_threads > 0
         assert not self.engine, "Cannot change number of threads after component has been added to an engine."
         self._num_threads = num_threads
-        queue_size = self._item_queue_size or 2 * num_threads
-        self._item_queue = queue.Queue(maxsize=queue_size)
         return self
 
     def fields(self, **fields_map):
@@ -489,20 +490,26 @@ class Component:
 
     def depends_on(self, other):
         self.dependencies.add(other)
-        return self
 
     def __or__(self, other):
-        other.depends_on(self)
-        return ComponentRange(self, other)
+        if isinstance(other, ComponentChain):
+            return ComponentChain([self] + other.components)
+        elif isinstance(other, Component):
+            return ComponentChain([self, other])
+        else:
+            raise TypeError(
+                f"a | b expected a Component or ComponentChain, got {type(other)}"
+            )
 
     def _enqueue_item(self, item):
         try:
             self.average_qsize = self.average_qsize * 0.9 + self._item_queue.qsize() * 0.1
             self._item_queue.put(item, block=False)
         except queue.Full:
-            pass
+            return False
         else:
             item.set_state(self.id, State.QUEUED)
+        return True
 
     def start(self):
         for i in range(self._num_threads):
@@ -568,36 +575,30 @@ class Component:
         raise NotImplementedError("Subclasses must implement this method.")
 
 
-class ComponentRange:
-    def __init__(self, start, end):
-        self.start = start
-        self.end = end
-
-    def depends_on(self, other):
-        if isinstance(other, ComponentRange):
-            self.start.depends_on(other.end)
-        elif isinstance(other, Component):
-            self.start.depends_on(other)
-        else:
-            raise TypeError(
-                f"depends_on() expects a Component or ComponentRange, got {type(other)}"
-            )
-        return self
+class ComponentChain:
+    def __init__(self, components):
+        self.components = components
 
     def __or__(self, other):
-        if isinstance(other, ComponentRange):
-            other.start.depends_on(self.end)
-            return ComponentRange(self.start, other.end)
+        if isinstance(other, ComponentChain):
+            return ComponentChain(self.components + other.components)
         elif isinstance(other, Component):
-            other.depends_on(self.end)
-            return ComponentRange(self.start, other)
+            return ComponentChain(self.components + [other])
         else:
             raise TypeError(
-                f"a | b expected a Component or ComponentRange, got {type(other)}"
+                f"a | b expected a Component or ComponentChain, got {type(other)}"
             )
 
     def __repr__(self):
-        return f"ComponentRange({self.start.id}, {self.end.id})"
+        return f"ComponentChain({' | '.join(c.id for c in self.components)})"
+
+    def link_dependencies(self):
+        '''
+        Link dependencies between components in the chain.
+        Each component depends on the previous one in the chain.
+        '''
+        for i in range(1, len(self.components)):
+            self.components[i].depends_on(self.components[i - 1])
 
 
 ##################### Utility Functions #####################

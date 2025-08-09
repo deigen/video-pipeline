@@ -44,7 +44,11 @@ def main():
         | tracker
         | annotate
         | writer.fields(frame='annotated_frame')
-        | pl.Print(
+    )
+
+    # print statement executed after tracker, without other components depending on it
+    engine.add(
+        tracker | pl.Print(
             lambda data:
             f'FRAME {data.pts}: {len(data.tracked_objects.tracker_id)} objects tracked / {len(data.detections["boxes"])} detections  {engine.get_fps():.3f} FPS'
         )
