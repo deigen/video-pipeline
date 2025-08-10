@@ -123,7 +123,7 @@ class Annotate(pl.Component):
         # Annotate the frame with detection boxes using an outside annotate_frame function
         data.annotated_frame = annotate_frame(data.frame, data.detections)
 
-# video writer whose data.frame in its process funciton is now the annotated_frame
+# video writer whose data.frame in its process function is mapped to data.annotated_frame
 writer = pl.VideoWriter("output.mp4").fields(frame='annotated_frame')
 ```
 
